@@ -43,6 +43,14 @@ export const adminRoutes = (
       }
     />
     <Route
+      path="/dashboard/all-users/users/:id"
+      element={
+        <ProtectedRoute allowedRoles={['admin']}>
+          <UsersManagement scope="users" />
+        </ProtectedRoute>
+      }
+    />
+    <Route
       path="/dashboard/all-users/roles"
       element={
         <ProtectedRoute allowedRoles={['admin']}>
