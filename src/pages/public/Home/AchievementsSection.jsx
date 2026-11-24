@@ -50,22 +50,23 @@ function AchievementsSection() {
       <div className="mx-auto max-w-7xl">
         {/* Header */}
         <div className="flex flex-col items-center text-center">
-          <div className="inline-flex items-center gap-2 rounded-full bg-primary/20 px-3.5 py-1 text-xs font-semibold text-dark">
+          {/* <div className="inline-flex items-center gap-2 rounded-full bg-primary/20 px-3.5 py-1 text-xs font-semibold text-dark">
             <FiAward className="text-amber-600" />
             <span>আমাদের প্রাপ্তি ও অর্জন</span>
-          </div>
+          </div> */}
 
-          <h2 className="mt-3 font-heading text-2xl font-bold text-dark sm:text-3xl md:text-4xl">
-            গর্বের মুহূর্ত ও বিশেষ স্বীকৃতিসমূহ
+          <h2 className="mt-3 font-heading text-base font-bold text-dark sm:text-2xl ">
+            আমাদের প্রাপ্তি ও অর্জন{' '}
           </h2>
 
-          <p className="mt-2.5 max-w-2xl text-xs sm:text-sm text-dark-muted md:text-base leading-relaxed">
-            পাঠকপ্রিয়তা ও গুণগত প্রকাশনার মেলবন্ধনে হসন্ত প্রকাশনের দীর্ঘ পথচলার বিভিন্ন জাতীয় সম্মাননা, বইমেলার স্মৃতি এবং ভিডিও প্রতিবেদন।
+          <p className="mt-2.5 max-w-2xl text-xs sm:text-sm md:text-base leading-relaxed">
+            পাঠকপ্রিয়তা ও গুণগত প্রকাশনার মেলবন্ধনে হসন্ত প্রকাশনের দীর্ঘ পথচলার
+            বিভিন্ন জাতীয় সম্মাননা, বইমেলার স্মৃতি এবং ভিডিও প্রতিবেদন।
           </p>
 
           {/* Filter Tabs */}
-          <div className="mt-6 flex flex-wrap justify-center gap-1.5 sm:gap-2">
-            {filterTabs.map((tab) => {
+          {/* <div className="mt-6 flex flex-wrap justify-center gap-1.5 sm:gap-2">
+            {filterTabs.map(tab => {
               const isActive = activeTab === tab.key;
               return (
                 <button
@@ -82,12 +83,12 @@ function AchievementsSection() {
                 </button>
               );
             })}
-          </div>
+          </div> */}
         </div>
 
         {/* Media Grid */}
         <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredItems.map((item) => {
+          {filteredItems.map(item => {
             const isVideo = item.type === 'video';
             const displayImage = isVideo ? item.thumbnail : item.image;
 
@@ -199,7 +200,7 @@ function AchievementsSection() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-3 sm:p-5 backdrop-blur-sm transition-opacity"
         >
           <div
-            onClick={(e) => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
             className="relative flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200"
           >
             {/* Modal Header */}
