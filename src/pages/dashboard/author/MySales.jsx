@@ -277,7 +277,7 @@ export default function MySales() {
             {
               key: 'title',
               header: 'Book Details',
-              sortable: true,
+              // sortable: true,
               render: (book, index) => (
                 <div className="flex items-center gap-3">
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-xs font-bold text-white">
@@ -297,14 +297,14 @@ export default function MySales() {
             {
               key: 'price',
               header: 'Price',
-              sortable: true,
+              // sortable: true,
               render: book => formatMoney(book.price),
             },
             {
               key: 'commissionRate',
               header: 'Commission Rate',
-              align: 'center',
-              sortable: true,
+              // align: 'center',
+              // sortable: true,
               sortValue: book => book.commissionPercent,
               render: book => (
                 <div>
@@ -320,29 +320,29 @@ export default function MySales() {
             {
               key: 'units',
               header: 'Copies Sold',
-              align: 'center',
-              sortable: true,
+              // align: 'center',
+              // sortable: true,
               render: book => (
                 <span className="font-medium text-slate-700">
                   {book.units.toLocaleString('en-US')}
                 </span>
               ),
             },
-            {
-              key: 'revenue',
-              header: 'Total Sales',
-              sortable: true,
-              render: book => (
-                <span className="text-slate-600 font-medium">
-                  {formatMoney(book.revenue)}
-                </span>
-              ),
-            },
+            // {
+            //   key: 'revenue',
+            //   header: 'Total Sales',
+            //   sortable: true,
+            //   render: book => (
+            //     <span className="text-slate-600 font-medium">
+            //       {formatMoney(book.revenue)}
+            //     </span>
+            //   ),
+            // },
             {
               key: 'authorCommission',
               header: 'Author Commission',
-              align: 'right',
-              sortable: true,
+              // align: 'right',
+              // sortable: true,
               sortValue: book => book.authorCommission,
               render: book => (
                 <span className="font-bold text-emerald-600 text-sm">
@@ -353,7 +353,7 @@ export default function MySales() {
             {
               key: 'status',
               header: 'Status',
-              align: 'center',
+              // align: 'center',
               render: () => (
                 <span className="inline-block rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-600">
                   Payable

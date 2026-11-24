@@ -4,77 +4,60 @@ import {
   FiArrowRight,
   FiBookOpen,
   FiCheckCircle,
-  FiDollarSign,
-  FiFileText,
   FiImage,
   FiLock,
-  FiShield,
 } from 'react-icons/fi';
 import { Link, useNavigate } from 'react-router-dom';
 import PageHeader from '../../../components/dashboard/PageHeader';
 import { useAuth } from '../../../context/useAuth';
 
-const publishingConditions = [
+/*
+  প্রতিটি আইটেমে একটি টাইটেল থাকবে, আর তার নিচে এক বা একাধিক ছবি।
+  - images: আপলোড করা ছবির লিংকগুলো এখানে দিন (এক বা একাধিক)
+  - to: টাইটেল ক্লিক করলে যেখানে যাবে (না দিলে সাধারণ লেখা হিসেবে দেখাবে)
+  উদাহরণ:
+  { id: 1, title: 'আপনার স্বামীকে আগলে রাখুন', to: '/books/1', images: ['/uploads/a.jpg', '/uploads/b.jpg'] }
+*/
+const publishingItems = [
   {
     id: 1,
-    icon: FiShield,
-    title: '1. Originality & Copyright Ownership',
-    description:
-      'The book must be an entirely original work authored by you. Any form of plagiarism, unauthorized translation, or copyright infringement is strictly prohibited and will lead to immediate delisting.',
-    points: [
-      'You must hold 100% exclusive publishing rights to the manuscript.',
-      'Quotations and references must be appropriately cited.',
-      'AI-generated content without substantial human authorship must be declared.',
+    title: 'Originality & Copyright Ownership',
+    to: '',
+    images: [
+      'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?auto=format&fit=crop&w=600&q=80',
     ],
   },
   {
     id: 2,
-    icon: FiFileText,
-    title: '2. Content & Community Guidelines',
-    description:
-      'Hosonta Prokashon upholds constructive cultural values. Content must respect ethical standards and comply with national publication laws.',
-    points: [
-      'Zero tolerance for hate speech, communal provocation, or defamation.',
-      'Must not violate legal, security, or privacy regulations.',
-      'Sensitive themes must include appropriate reader advisories.',
+    title: 'Content & Community Guidelines',
+    to: '',
+    images: [
+      'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1526243741027-444d633d7365?auto=format&fit=crop&w=600&q=80',
     ],
   },
   {
     id: 3,
-    icon: FiImage,
-    title: '3. Formatting & Cover Specifications',
-    description:
-      'Quality visual presentation ensures optimal printing and reader satisfaction. Please prepare your assets according to standard dimensions.',
-    points: [
-      'Cover image must be sharp, high-resolution (recommended 1200x1600px, aspect ratio 3:4).',
-      'Accurate page count and realistic retail pricing must be provided.',
-      'Proper synopsis/description in both Bengali and English where applicable.',
+    title: 'Formatting & Cover Specifications',
+    to: '',
+    images: [
+      'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=600&q=80',
     ],
   },
   {
     id: 4,
-    icon: FiCheckCircle,
-    title: '4. Editorial Verification Process',
-    description:
-      'Every newly added book goes through editorial moderation before being published publicly on the marketplace.',
-    points: [
-      'Submitted books are initially marked as "Pending" review.',
-      'The editorial board reviews submissions within 24-48 business hours.',
-      'Authors receive review feedback directly in their dashboard.',
+    title: 'Editorial Verification Process',
+    to: '',
+    images: [
+      'https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?auto=format&fit=crop&w=600&q=80',
+      'https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&w=600&q=80',
     ],
   },
-  {
-    id: 5,
-    icon: FiDollarSign,
-    title: '5. Pricing, Royalty & Payment Terms',
-    description:
-      'Transparent royalty distribution per copy sold, tracked live in your author analytics dashboard.',
-    points: [
-      'Royalty is calculated automatically per delivered customer order.',
-      'Payout requests can be submitted once the minimum balance is reached.',
-      'Hosonta handles distribution, customer delivery, and packaging.',
-    ],
-  },
+  { id: 5, title: 'Pricing, Royalty & Payment Terms', to: '', images: [] },
 ];
 
 function PublishingTerms() {
@@ -90,117 +73,140 @@ function PublishingTerms() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <PageHeader
         title="Publishing Terms & Guidelines"
-        description="Carefully review the editorial requirements and terms before adding a new title to Hosonta Prokashon."
         action={
           <Link
             to="/dashboard/my-books"
-            className="inline-flex items-center gap-2 rounded-xl border border-dark/10 bg-white px-4 py-2.5 text-xs font-semibold text-dark shadow-xs transition hover:border-primary hover:text-primary-hover sm:text-sm"
+            className="inline-flex items-center gap-2 rounded-md border border-dark/10 bg-white px-3 py-2 text-xs font-semibold text-dark transition hover:border-primary hover:text-primary-hover"
           >
             <FiBookOpen /> Back to My Books
           </Link>
         }
       />
 
-      {/* Account Verification Status */}
+      {/* Account verification status */}
       {isPending ? (
-        <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-5 text-amber-900 shadow-xs">
-          <FiAlertCircle className="mt-0.5 text-xl shrink-0 text-amber-600" />
-          <div className="text-sm">
-            <p className="font-semibold">Author Verification Required</p>
-            <p className="mt-1 text-amber-800">
-              Your author account is currently awaiting verification by our editorial team.
-              You can review the publishing guidelines below, but adding new books is enabled once your account is fully verified.
-            </p>
-          </div>
+        <div className="flex items-start gap-2.5 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-900">
+          <FiAlertCircle className="mt-0.5 shrink-0 text-base text-amber-600" />
+          <p className="text-xs leading-5 sm:text-sm">
+            <span className="font-semibold">
+              Author verification required.{' '}
+            </span>
+            Adding new books is enabled once your account is verified.
+          </p>
         </div>
       ) : (
-        <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 text-emerald-900 shadow-xs">
-          <FiCheckCircle className="text-xl text-emerald-600 shrink-0" />
-          <p className="text-sm font-medium">
-            <span className="font-semibold text-emerald-800">Verified Author Status:</span> You are eligible to publish books upon agreeing to the conditions below.
+        <div className="flex items-center gap-2.5 rounded-md border border-emerald-200 bg-emerald-50/70 p-3 text-emerald-900">
+          <FiCheckCircle className="shrink-0 text-base text-emerald-600" />
+          <p className="text-xs leading-5 sm:text-sm">
+            <span className="font-semibold">Verified author.</span>
           </p>
         </div>
       )}
 
-      {/* Condition Cards Grid */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {publishingConditions.map(item => {
-          const Icon = item.icon;
-          return (
-            <div
-              key={item.id}
-              className="rounded-2xl border border-dark/10 bg-white p-6 shadow-xs transition-shadow hover:shadow-md"
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary/20 text-xl text-dark">
-                  <Icon />
-                </span>
-                <h3 className="font-heading text-base font-bold text-dark">
-                  {item.title}
-                </h3>
-              </div>
-              <p className="mt-3 text-sm leading-relaxed text-dark-muted">
-                {item.description}
-              </p>
-              <ul className="mt-4 space-y-2 border-t border-dark/5 pt-3">
-                {item.points.map((point, index) => (
-                  <li
-                    key={index}
-                    className="flex items-start gap-2 text-xs text-dark/80"
-                  >
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                    <span>{point}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
+      {/* Title + image grid */}
+      <div className="space-y-4">
+        {publishingItems.map(item => (
+          <section
+            key={item.id}
+            className="rounded-lg border border-dark/10 bg-white p-4"
+          >
+            {item.to ? (
+              <Link
+                to={item.to}
+                className="font-heading text-sm font-bold text-dark transition hover:text-primary-hover md:text-base"
+              >
+                {item.title}
+              </Link>
+            ) : (
+              <h3 className="font-heading text-sm font-bold text-dark md:text-base">
+                {item.title}
+              </h3>
+            )}
+
+            <ImageGrid images={item.images} title={item.title} />
+          </section>
+        ))}
       </div>
 
-      {/* Agreement & Action Card */}
-      <div className="rounded-2xl border-2 border-primary/40 bg-gradient-to-br from-cream to-white p-6 shadow-sm md:p-8">
-        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-3">
-            <h3 className="font-heading text-lg font-bold text-dark md:text-xl">
-              Author Agreement & Confirmation
-            </h3>
-            <label className="flex cursor-pointer items-start gap-3">
-              <input
-                type="checkbox"
-                checked={hasAgreed}
-                onChange={e => setHasAgreed(e.target.checked)}
-                className="mt-1 h-5 w-5 rounded border-dark/20 text-primary accent-primary focus:ring-primary"
-              />
-              <span className="text-sm font-medium leading-relaxed text-dark">
-                I have read, understood, and solemnly agree to adhere to all the publication conditions, copyright policies, and editorial standards of Hosonta Prokashon.
-              </span>
-            </label>
-          </div>
+      {/* Agreement */}
+      <section className="flex flex-col gap-3 rounded-lg border border-primary/40 bg-cream p-4 sm:flex-row sm:items-center sm:justify-between">
+        <label className="flex cursor-pointer items-start gap-2.5">
+          <input
+            type="checkbox"
+            checked={hasAgreed}
+            onChange={e => setHasAgreed(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-dark/20 accent-primary"
+          />
+          <span className="text-xs leading-5 text-dark sm:text-sm">
+            I have read and agree to all the publishing conditions.
+          </span>
+        </label>
 
-          <div className="shrink-0">
-            <button
-              type="button"
-              onClick={handleProceed}
-              disabled={!hasAgreed || isPending}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3.5 text-sm font-bold text-dark shadow-sm transition-all hover:bg-primary-hover hover:scale-105 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100 md:w-auto"
-            >
-              {isPending ? (
-                <>
-                  <FiLock /> Pending Verification
-                </>
-              ) : (
-                <>
-                  Agree & Add New Book <FiArrowRight />
-                </>
-              )}
-            </button>
-          </div>
-        </div>
+        <button
+          type="button"
+          onClick={handleProceed}
+          disabled={!hasAgreed || isPending}
+          className="inline-flex w-full shrink-0 items-center justify-center gap-2 rounded-md bg-primary px-4 py-2.5 text-sm font-bold text-dark transition hover:bg-primary-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-dark disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+        >
+          {isPending ? (
+            <>
+              <FiLock /> Pending Verification
+            </>
+          ) : (
+            <>
+              Agree & Add New Book <FiArrowRight />
+            </>
+          )}
+        </button>
+      </section>
+    </div>
+  );
+}
+
+function ImageGrid({ images, title }) {
+  if (!images || images.length === 0) {
+    return (
+      <div className="mt-3 flex h-28 items-center justify-center rounded-md border border-dashed border-dark/15 bg-cream text-xl text-dark/30">
+        <FiImage />
       </div>
+    );
+  }
+
+  const single = images.length === 1;
+
+  return (
+    <div
+      className={
+        single
+          ? 'mt-3'
+          : 'mt-3 flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] sm:grid sm:snap-none sm:grid-cols-3 sm:overflow-visible sm:pb-0 lg:grid-cols-4 [&::-webkit-scrollbar]:hidden'
+      }
+    >
+      {images.map((src, index) => (
+        <a
+          key={src}
+          href={src}
+          target="_blank"
+          rel="noreferrer"
+          className={`block overflow-hidden rounded-md border border-dark/10 bg-cream ${
+            single ? '' : 'w-[42%] shrink-0 snap-start sm:w-auto'
+          }`}
+        >
+          <img
+            src={src}
+            alt={`${title} - ছবি ${index + 1}`}
+            loading="lazy"
+            className={`w-full ${
+              single
+                ? 'max-h-[32rem] object-contain'
+                : 'aspect-[3/4] object-cover'
+            }`}
+          />
+        </a>
+      ))}
     </div>
   );
 }
