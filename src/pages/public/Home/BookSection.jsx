@@ -3,7 +3,7 @@ import { FiArrowRight, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 import BookRow from '../../../components/books/BookRow';
 
-const BOOKS_PER_SECTION = 18;
+const BOOKS_PER_SECTION = 24;
 
 function BookSection({ title, to, select }) {
   const scrollerRef = useRef(null);

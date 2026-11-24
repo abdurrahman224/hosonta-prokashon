@@ -1,5 +1,6 @@
 import AuthorCtaSection from './AuthorCtaSection'
 import AboutPreviewSection from './AboutPreviewSection'
+import AchievementsSection from './AchievementsSection'
 import AuthorSection from './AuthorSection'
 import BestSellersSection from './BestSellersSection'
 import CategorySection from './CategorySection'
@@ -23,13 +24,14 @@ function Home() {
       <NovelSection />
       <PoetrySection />
       <SisterConcernsPage />
+      <AuthorCtaSection />
       {/* <FeaturedBooksSection /> */}
       <TestimonialsSection />
       <PartnersPage />
+      <AchievementsSection />
       <AboutPreviewSection />
       <StatisticsSection />
 
-      <AuthorCtaSection />
     </>
   );
 }
