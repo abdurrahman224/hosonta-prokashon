@@ -141,7 +141,7 @@ function HeroSection() {
           to="/register"
           className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary bg-white px-4 py-2 text-xs font-semibold text-dark shadow-sm transition hover:border-primary-hover hover:bg-primary/10 active:scale-[0.98]"
         >
-          পাঠক হোন
+          ম্যাগাজিন লিখুন
           <FiArrowRight />
         </Link>
       </div>
@@ -155,6 +155,14 @@ function HeroSection() {
             className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-dark transition hover:bg-primary-hover md:px-5 md:py-2.5"
           >
             পাণ্ডুলিপি জমা দিন
+            <FiArrowRight />
+          </Link>
+
+          <Link
+            to="/register"
+            className="inline-flex items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-semibold text-dark transition hover:bg-primary-hover md:px-5 md:py-2.5"
+          >
+            ম্যাগাজিন লিখুন
             <FiArrowRight />
           </Link>
         </div>

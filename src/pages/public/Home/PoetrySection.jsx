@@ -9,7 +9,11 @@ function PoetrySection() {
       select={() =>
         books.filter(book => {
           const category = String(book.category ?? '').toLowerCase();
-          return category.includes('কবিতা') || category.includes('poetry');
+          return (
+            category.includes('কবিতা') ||
+            category.includes('কাব্য') ||
+            category.includes('poetry')
+          );
         })
       }
     />

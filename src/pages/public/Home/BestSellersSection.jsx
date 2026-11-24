@@ -12,7 +12,9 @@ function BestSellersSection() {
         const flagged = books.filter(
           book => book.bestseller || book.bestSeller || book.isBestseller,
         );
-        if (flagged.length) return flagged;
+        if (flagged.length) {
+          return [...flagged].sort((a, b) => soldCount(b) - soldCount(a));
+        }
         return [...books].sort((a, b) => soldCount(b) - soldCount(a));
       }}
     />
