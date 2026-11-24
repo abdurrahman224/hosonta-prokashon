@@ -1,0 +1,113 @@
+export const ROLES = {
+  ADMIN: 'admin',
+  MODERATOR: 'moderator',
+  AUTHOR: 'author',
+  EMPLOYEE: 'employee',
+  USER: 'user',
+}
+
+export const ROLE_LABELS = {
+  [ROLES.ADMIN]: 'Admin',
+  [ROLES.MODERATOR]: 'Moderator',
+  [ROLES.AUTHOR]: 'Author',
+  [ROLES.EMPLOYEE]: 'Employee',
+  [ROLES.USER]: 'Reader',
+}
+
+export const PERMISSIONS = {
+  MANAGE_USERS: 'users.manage',
+  MANAGE_ROLES: 'roles.manage',
+  BOOKS_CREATE: 'books.create',
+  BOOKS_READ: 'books.read',
+  BOOKS_UPDATE: 'books.update',
+  BOOKS_DELETE: 'books.delete',
+  AUTHORS_CREATE: 'authors.create',
+  AUTHORS_READ: 'authors.read',
+  AUTHORS_UPDATE: 'authors.update',
+  AUTHORS_DELETE: 'authors.delete',
+  MAGAZINES_CREATE: 'magazines.create',
+  MAGAZINES_READ: 'magazines.read',
+  MAGAZINES_UPDATE: 'magazines.update',
+  MAGAZINES_DELETE: 'magazines.delete',
+  MANUSCRIPTS_SUBMIT: 'manuscripts.submit',
+  MANUSCRIPTS_REVIEW: 'manuscripts.review',
+  COMMENTS_MODERATE: 'comments.moderate',
+  MESSAGES_MODERATE: 'messages.moderate',
+  ORDERS_MANAGE: 'orders.manage',
+  STOCK_MANAGE: 'stock.manage',
+  SETTINGS_MANAGE: 'settings.manage',
+  REPORTS_READ: 'reports.read',
+  OWN_BOOKS_MANAGE: 'own-books.manage',
+  OWN_PROFILE_MANAGE: 'own-profile.manage',
+  OWN_SALES_READ: 'own-sales.read',
+  SUPPORT_READ: 'support.read',
+  SHOP_BUY: 'shop.buy',
+  CART_USE: 'cart.use',
+  WISHLIST_USE: 'wishlist.use',
+  OWN_ORDERS_READ: 'own-orders.read',
+  REVIEWS_CREATE: 'reviews.create',
+  REVIEW_WRITE: 'review:write',
+  REVIEW_EDIT_OWN: 'review:edit-own',
+  REVIEW_DELETE_OWN: 'review:delete-own',
+  REVIEW_REPORT: 'review:report',
+  REVIEW_MODERATE: 'review:moderate',
+  REVIEW_DELETE_ANY: 'review:delete-any',
+  REVIEW_VIEW_OWN_BOOKS: 'review:view-own-books',
+  OWN_ADDRESSES_MANAGE: 'own-addresses.manage',
+  AUTHOR_APPLICATION_SUBMIT: 'author-application.submit',
+  AUTHOR_APPLICATIONS_REVIEW: 'author-applications.review',
+}
+
+const ALL_PERMISSIONS = '*'
+
+export const ROLE_PERMISSIONS = {
+  [ROLES.ADMIN]: [ALL_PERMISSIONS],
+  [ROLES.MODERATOR]: [
+    PERMISSIONS.BOOKS_READ,
+    PERMISSIONS.BOOKS_UPDATE,
+    PERMISSIONS.MAGAZINES_READ,
+    PERMISSIONS.MAGAZINES_UPDATE,
+    PERMISSIONS.MANUSCRIPTS_REVIEW,
+    PERMISSIONS.COMMENTS_MODERATE,
+    PERMISSIONS.MESSAGES_MODERATE,
+    PERMISSIONS.AUTHORS_READ,
+    PERMISSIONS.AUTHOR_APPLICATIONS_REVIEW,
+    PERMISSIONS.REVIEW_MODERATE,
+  ],
+  [ROLES.AUTHOR]: [
+    PERMISSIONS.BOOKS_READ,
+    PERMISSIONS.OWN_BOOKS_MANAGE,
+    PERMISSIONS.OWN_PROFILE_MANAGE,
+    PERMISSIONS.MANUSCRIPTS_SUBMIT,
+    PERMISSIONS.OWN_SALES_READ,
+    PERMISSIONS.REVIEW_VIEW_OWN_BOOKS,
+    PERMISSIONS.REVIEW_REPORT,
+  ],
+  [ROLES.EMPLOYEE]: [
+    PERMISSIONS.BOOKS_READ,
+    PERMISSIONS.ORDERS_MANAGE,
+    PERMISSIONS.STOCK_MANAGE,
+    PERMISSIONS.SUPPORT_READ,
+  ],
+  [ROLES.USER]: [
+    PERMISSIONS.BOOKS_READ,
+    PERMISSIONS.SHOP_BUY,
+    PERMISSIONS.CART_USE,
+    PERMISSIONS.WISHLIST_USE,
+    PERMISSIONS.OWN_ORDERS_READ,
+    PERMISSIONS.REVIEWS_CREATE,
+    PERMISSIONS.REVIEW_WRITE,
+    PERMISSIONS.REVIEW_EDIT_OWN,
+    PERMISSIONS.REVIEW_DELETE_OWN,
+    PERMISSIONS.REVIEW_REPORT,
+    PERMISSIONS.OWN_PROFILE_MANAGE,
+    PERMISSIONS.OWN_ADDRESSES_MANAGE,
+    PERMISSIONS.AUTHOR_APPLICATION_SUBMIT,
+    PERMISSIONS.MAGAZINES_CREATE,
+  ],
+}
+
+export function hasPermission(role, permission) {
+  const permissions = ROLE_PERMISSIONS[role] ?? []
+  return permissions.includes(ALL_PERMISSIONS) || permissions.includes(permission)
+}

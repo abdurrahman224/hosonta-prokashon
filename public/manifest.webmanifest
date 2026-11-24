@@ -1,0 +1,10 @@
+{
+  "name": "হসন্ত প্রকাশন",
+  "short_name": "হসন্ত",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF7F0",
+  "theme_color": "#0A0A0A",
+  "lang": "bn",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

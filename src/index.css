@@ -1,0 +1,50 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #faf7f0;
+  font-family: 'Hind Siliguri', sans-serif;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+.font-heading {
+  font-family: 'Anek Bangla', sans-serif;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+
+
+*:focus-visible {
+  outline: 2px solid #fdb82e;
+  outline-offset: 3px;
+}
+
+.magazine-field:focus,
+.magazine-field:focus-visible {
+  border-color: #fdb82e;
+  outline: none;
+  outline-offset: 0;
+}
+
+.magazine-field-error:not(:focus) {
+  border-color: #ef4444;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
