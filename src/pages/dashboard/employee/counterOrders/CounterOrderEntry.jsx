@@ -26,6 +26,7 @@ import { useAuth } from '../../../../context/useAuth';
 import { useData } from '../../../../context/useData';
 import { formatCurrency } from '../../../../utils/format';
 import { FREQUENT_SHOPS, PRESET_COMMISSIONS } from './dummyData';
+import { getStoredShops } from '../../../../data/shops';
 import CashMemoModal from './CashMemoModal';
 import {
   PAYMENT_METHODS,
@@ -220,6 +221,7 @@ export default function CounterOrderEntry() {
       });
     };
     FREQUENT_SHOPS.forEach(s => push({ shopName: s }));
+    getStoredShops().forEach(s => push(s));
     customers.forEach(push);
     orders.filter(o => o.orderType === 'counter').forEach(push);
     return [...map.values()];

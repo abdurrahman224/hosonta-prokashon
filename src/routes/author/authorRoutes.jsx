@@ -4,6 +4,7 @@ import ProtectedRoute from '../common/ProtectedRoute'
 
 const MyBooks = lazy(() => import('../../pages/dashboard/author/MyBooks'))
 const BookForm = lazy(() => import('../../pages/dashboard/author/BookForm'))
+const AddBook = lazy(() => import('../../pages/dashboard/employee/AddBook'))
 const ManuscriptSubmit = lazy(() => import('../../pages/dashboard/author/ManuscriptSubmit'))
 const MyProfile = lazy(() => import('../../pages/dashboard/author/MyProfile'))
 const MySales = lazy(() => import('../../pages/dashboard/author/MySales'))
@@ -31,8 +32,8 @@ export const authorRoutes = (
     <Route
       path="/dashboard/books/new"
       element={
-        <ProtectedRoute allowedRoles={['author']}>
-          <BookForm />
+        <ProtectedRoute allowedRoles={['author', 'admin', 'employee']}>
+          <AddBook />
         </ProtectedRoute>
       }
     />

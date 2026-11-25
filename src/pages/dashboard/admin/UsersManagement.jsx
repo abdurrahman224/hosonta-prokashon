@@ -1,23 +1,31 @@
 import { useState, useMemo } from 'react';
 import {
   FiArrowLeft,
+  FiCalendar,
   FiCheckCircle,
   FiClock,
+  FiCopy,
+  FiExternalLink,
   FiEye,
+  FiFileText,
   FiHeart,
   FiMail,
   FiMapPin,
   FiPackage,
   FiPhone,
+  FiPrinter,
   FiSearch,
   FiShoppingBag,
   FiTrendingUp,
   FiTruck,
   FiUser,
+  FiUserCheck,
   FiUsers,
+  FiX,
   FiXCircle,
 } from 'react-icons/fi';
 import { FaWhatsapp } from 'react-icons/fa';
+import toast from 'react-hot-toast';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import PageHeader from '../../../components/dashboard/PageHeader';
 import StatusBadge from '../../../components/dashboard/StatusBadge';
@@ -26,8 +34,17 @@ import { useData } from '../../../context/useData';
 import { formatCurrency } from '../../../utils/format';
 
 /* ------------------------------------------------------------------ */
-/* Helpers                                                             */
+/* Constants & Helpers                                                 */
 /* ------------------------------------------------------------------ */
+
+const COMPANY = {
+  name: 'হসন্ত প্রকাশন',
+  legalName: 'Hosonta Prokashon',
+  address: '৩৮/২ মান্নান বাজার (২য় তলা), বাংলাবাজার, ঢাকা-১১০০',
+  hotline: '০১৬২৮-০৩৭৫৯১',
+  email: 'support@hosontoprokashon.com',
+  website: 'www.hosontoprokashon.com',
+};
 
 const toBnNum = (value) => {
   const bnDigits = '০১২৩৪৫৬৭৮৯';
@@ -58,12 +75,679 @@ function readWishlistIds(userId) {
   }
 }
 
+// Resolves book details (cover, title, author, price) from the books dataset
+function resolveOrderItem(item, allBooks = []) {
+  const matchedBook = allBooks.find(
+    (b) => String(b.id) === String(item.bookId || item.id)
+  );
+
+  return {
+    ...item,
+    cover:
+      item.cover ||
+      item.image ||
+      matchedBook?.cover ||
+      matchedBook?.image ||
+      'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=400&q=80',
+    title: item.title || matchedBook?.title || 'বইয়ের নাম',
+    author: item.author || matchedBook?.author || 'লেখক',
+    category: item.category || matchedBook?.category || 'সাহিত্য',
+    price: Number(item.price ?? matchedBook?.price ?? 0),
+    quantity: Number(item.quantity ?? item.qty ?? 1),
+  };
+}
+
+// Generates courier details and status
+function getCourierInfo(order) {
+  const isCounter = order.orderType === 'counter';
+  const courierName =
+    order.courier ||
+    (isCounter ? 'কাউন্টার ডেলিভারি / শোরুম' : 'Steadfast Courier');
+
+  const consignmentId =
+    order.consignmentId ||
+    order.trackingCode ||
+    (isCounter
+      ? `CNT-${order.id.slice(-6)}`
+      : `STD-${order.id.replace(/[^\d]/g, '').slice(-8) || '84930215'}`);
+
+  let courierStatusText = 'প্রক্রিয়াকরণ চলছে';
+  let badgeColor = 'bg-amber-50 text-amber-700 ring-amber-200/60';
+
+  if (order.status === 'delivered') {
+    courierStatusText = 'ডেলিভারি সম্পন্ন (Delivered)';
+    badgeColor = 'bg-emerald-50 text-emerald-700 ring-emerald-200/60';
+  } else if (order.status === 'shipped') {
+    courierStatusText = 'ইন ট্রানজিট - ডেলিভারির জন্য প্রেরিত (Out for Delivery)';
+    badgeColor = 'bg-blue-50 text-blue-700 ring-blue-200/60';
+  } else if (order.status === 'processing') {
+    courierStatusText = 'পার্সেল প্রস্তুত ও বুকিং সম্পন্ন (Booked)';
+    badgeColor = 'bg-indigo-50 text-indigo-700 ring-indigo-200/60';
+  } else if (order.status === 'cancelled') {
+    courierStatusText = 'বাতিল / রিটার্ন করা হয়েছে (Cancelled/Returned)';
+    badgeColor = 'bg-rose-50 text-rose-700 ring-rose-200/60';
+  } else {
+    courierStatusText = 'অর্ডার বুকিং অপেক্ষমান (Pending Pickup)';
+  }
+
+  return {
+    courierName,
+    consignmentId,
+    courierStatusText,
+    badgeColor,
+    isCounter,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Order Details & Invoice Modal Component                            */
+/* ------------------------------------------------------------------ */
+
+function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
+  const [modalTab, setModalTab] = useState('details'); // 'details' | 'invoice'
+
+  if (!order) return null;
+
+  const items = (order.items || []).map((item) =>
+    resolveOrderItem(item, allBooks)
+  );
+
+  const subtotal = items.reduce(
+    (sum, item) => sum + item.price * item.quantity,
+    0
+  );
+  const deliveryCharge = Number(
+    order.deliveryCharge ?? (order.orderType === 'counter' ? 0 : 60)
+  );
+  const discount = Number(order.discount ?? 0);
+  const grandTotal = Number(order.total ?? subtotal + deliveryCharge - discount);
+  const totalItemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+
+  const courier = getCourierInfo(order);
+
+  const handleCopy = (text, label = 'আইডি') => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(text);
+      toast.success(`${label} কপি করা হয়েছে!`);
+    }
+  };
+
+  const handlePrint = () => {
+    setModalTab('invoice');
+    setTimeout(() => {
+      window.print();
+    }, 150);
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 sm:p-4 backdrop-blur-xs transition-opacity print:p-0 print:bg-white"
+    >
+      {/* Print Specific CSS */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #invoice-printable, #invoice-printable * { visibility: visible !important; }
+          #invoice-printable {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100% !important;
+            margin: 0 !important;
+            padding: 15mm !important;
+            border: none !important;
+            box-shadow: none !important;
+            background: white !important;
+          }
+          @page { margin: 10mm; size: A4 portrait; }
+        }
+      `}</style>
+
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="relative flex max-h-[95vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200 print:max-h-none print:shadow-none print:rounded-none"
+      >
+        {/* Modal Top Header (Hidden when printing) */}
+        <div className="flex flex-wrap items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 py-3 sm:px-6 print:hidden">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-heading text-sm sm:text-base font-bold text-slate-900">
+              অর্ডার বিবরণ ও চালান
+            </span>
+            <span className="font-mono text-xs font-semibold text-primary-hover bg-primary/10 px-2 py-0.5 rounded">
+              {order.id}
+            </span>
+            <button
+              type="button"
+              onClick={() => handleCopy(order.id, 'অর্ডার আইডি')}
+              title="কপি করুন"
+              className="rounded p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200"
+            >
+              <FiCopy className="text-xs" />
+            </button>
+            <StatusBadge status={order.status} />
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* View Mode Toggle */}
+            <div className="flex rounded-lg bg-slate-200/80 p-0.5 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setModalTab('details')}
+                className={`rounded-md px-3 py-1 transition ${
+                  modalTab === 'details'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                অর্ডার ও কুরিয়ার তথ্য
+              </button>
+              <button
+                type="button"
+                onClick={() => setModalTab('invoice')}
+                className={`rounded-md px-3 py-1 transition ${
+                  modalTab === 'invoice'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                ইনভয়েস / ক্যাশ মেমো
+              </button>
+            </div>
+
+            {/* Print button */}
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-dark transition hover:bg-primary-hover shadow-xs"
+            >
+              <FiPrinter className="text-sm" />
+              <span className="hidden sm:inline">প্রিন্ট ইনভয়েস</span>
+            </button>
+
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-200 hover:text-slate-700"
+            >
+              <FiX className="text-lg" />
+            </button>
+          </div>
+        </div>
+
+        {/* Modal Body: Tab 1 - Order & Courier Details */}
+        {modalTab === 'details' && (
+          <div className="overflow-y-auto p-4 sm:p-6 space-y-6">
+            {/* Courier & Delivery Status Card */}
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4 sm:p-5">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+                    <FiTruck className="text-2xl" />
+                  </span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                        কুরিয়ার ও ডেলিভারি পার্টনার
+                      </p>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-bold ring-1 ${courier.badgeColor}`}
+                      >
+                        {courier.courierStatusText}
+                      </span>
+                    </div>
+                    <h3 className="font-heading text-base sm:text-lg font-bold text-slate-900">
+                      {courier.courierName}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 sm:text-right">
+                  <p className="text-[11px] font-medium text-slate-400">
+                    কনসাইনমেন্ট / ট্র্যাকিং নম্বর
+                  </p>
+                  <div className="mt-0.5 flex items-center gap-1.5 sm:justify-end">
+                    <span className="font-mono text-sm font-bold text-slate-800">
+                      {courier.consignmentId}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCopy(courier.consignmentId, 'ট্র্যাকিং কোড')
+                      }
+                      title="কপি করুন"
+                      className="text-slate-400 hover:text-primary-hover"
+                    >
+                      <FiCopy className="text-xs" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Delivery Step Progression */}
+              <div className="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 border-t border-slate-200/80 pt-4">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-500 text-white text-xs">
+                    <FiCheckCircle />
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">অর্ডার গ্রহণ</p>
+                    <p className="text-[10px] text-slate-500">{formatDate(order.date)}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-full text-xs ${
+                      order.status !== 'new'
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-slate-200 text-slate-500'
+                    }`}
+                  >
+                    <FiCheckCircle />
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">প্যাকেজিং সম্পন্ন</p>
+                    <p className="text-[10px] text-slate-500">স্টক বরাদ্দ</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-full text-xs ${
+                      order.status === 'shipped' || order.status === 'delivered'
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-slate-200 text-slate-500'
+                    }`}
+                  >
+                    <FiTruck />
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">কুরিয়ারে হস্তান্তর</p>
+                    <p className="text-[10px] text-slate-500">{courier.courierName}</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`flex h-7 w-7 items-center justify-center rounded-full text-xs ${
+                      order.status === 'delivered'
+                        ? 'bg-emerald-500 text-white'
+                        : order.status === 'cancelled'
+                        ? 'bg-rose-500 text-white'
+                        : 'bg-slate-200 text-slate-500'
+                    }`}
+                  >
+                    {order.status === 'delivered' ? (
+                      <FiCheckCircle />
+                    ) : order.status === 'cancelled' ? (
+                      <FiXCircle />
+                    ) : (
+                      <FiClock />
+                    )}
+                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-slate-900">
+                      {order.status === 'delivered'
+                        ? 'ডেলিভারি সম্পন্ন'
+                        : order.status === 'cancelled'
+                        ? 'অর্ডার বাতিল'
+                        : 'ডেলিভারি অপেক্ষমান'}
+                    </p>
+                    <p className="text-[10px] text-slate-500">
+                      {order.status === 'delivered' ? 'গ্রাহক গ্রহণ করেছেন' : 'প্রক্রিয়াধীন'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Books Ordered List Section (তিনি কোন বই গুলো নিয়েছেন) */}
+            <div>
+              <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                <h4 className="font-heading text-sm sm:text-base font-bold text-slate-900">
+                  অর্ডারকৃত বইসমূহ ({toBnNum(totalItemCount)}টি বই)
+                </h4>
+                <span className="text-xs font-medium text-slate-500">
+                  আইটেম সংখ্যা: {toBnNum(items.length)}টি
+                </span>
+              </div>
+
+              <div className="mt-3 divide-y divide-slate-100">
+                {items.map((item, idx) => (
+                  <div
+                    key={`${item.bookId || item.id || idx}`}
+                    className="flex items-center justify-between gap-3 py-3 hover:bg-slate-50/50 rounded-xl px-2 transition"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={item.cover}
+                        alt={item.title}
+                        className="h-14 w-11 rounded-lg border border-slate-200 object-cover shadow-2xs shrink-0"
+                      />
+                      <div className="min-w-0">
+                        <h5 className="font-heading text-sm font-bold text-slate-900 truncate">
+                          {item.title}
+                        </h5>
+                        <p className="text-xs text-slate-500 truncate">
+                          লেখক: {item.author}
+                        </p>
+                        <span className="inline-block mt-0.5 rounded bg-slate-100 px-1.5 py-0.2 text-[10px] font-medium text-slate-600">
+                          {item.category}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-5 shrink-0 text-right">
+                      <div>
+                        <p className="text-xs text-slate-500">
+                          একক মূল্য: {formatCurrency(item.price)}
+                        </p>
+                        <p className="text-xs font-semibold text-slate-800">
+                          পরিমাণ: {toBnNum(item.quantity)} কপি
+                        </p>
+                      </div>
+                      <div className="w-20 text-right font-heading text-sm font-bold text-slate-900">
+                        {formatCurrency(item.price * item.quantity)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Order Details & Summary Grid */}
+            <div className="grid gap-5 md:grid-cols-2 pt-2">
+              {/* Shipping & Customer Information */}
+              <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2.5 text-xs sm:text-sm">
+                <h5 className="font-heading text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
+                  গ্রাহক ও ডেলিভারি বিবরণ
+                </h5>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">গ্রাহকের নাম:</span>
+                  <span className="font-semibold text-slate-900">
+                    {order.customerName || user?.name || 'গ্রাহক'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">মোবাইল নাম্বার:</span>
+                  <span className="font-mono font-semibold text-slate-900">
+                    {order.phone || user?.phone || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">ডেলিভারি ঠিকানা:</span>
+                  <span className="max-w-[200px] text-right font-medium text-slate-800">
+                    {order.address || user?.address || '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">অর্ডার তারিখ:</span>
+                  <span className="font-medium text-slate-800">
+                    {formatDate(order.date)}
+                  </span>
+                </div>
+                {order.notes && (
+                  <div className="pt-2 border-t border-slate-100">
+                    <span className="text-[11px] text-slate-400 block">বিশেষ নোট:</span>
+                    <p className="text-xs font-medium text-slate-700 mt-0.5">
+                      {order.notes}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Payment & Total Amount Calculation */}
+              <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2 text-xs sm:text-sm">
+                <h5 className="font-heading text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
+                  পেমেন্ট ও হিসাব বিবরণী
+                </h5>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">পেমেন্ট মাধ্যম:</span>
+                  <span className="font-semibold uppercase text-slate-800">
+                    {order.paymentMethod || 'ক্যাশ অন ডেলিভারি (COD)'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">পেমেন্ট স্ট্যাটাস:</span>
+                  <span
+                    className={`font-semibold rounded-full px-2 py-0.2 text-xs ${
+                      order.paymentStatus === 'paid' || order.paymentStatus === 'verified'
+                        ? 'bg-emerald-50 text-emerald-700'
+                        : 'bg-amber-50 text-amber-700'
+                    }`}
+                  >
+                    {order.paymentStatus === 'paid' || order.paymentStatus === 'verified'
+                      ? 'পরিশোধিত (Paid)'
+                      : 'বকেয়া / COD'}
+                  </span>
+                </div>
+                <div className="flex justify-between pt-1">
+                  <span className="text-slate-500">আইটেম সাবটোটাল:</span>
+                  <span className="font-medium text-slate-800">
+                    {formatCurrency(subtotal)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">কুরিয়ার ডেলিভারি চার্জ:</span>
+                  <span className="font-medium text-slate-800">
+                    {formatCurrency(deliveryCharge)}
+                  </span>
+                </div>
+                {discount > 0 && (
+                  <div className="flex justify-between text-emerald-600">
+                    <span>বিশেষ ছাড় / ডিসকাউন্ট:</span>
+                    <span>- {formatCurrency(discount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-slate-200 pt-2 text-sm sm:text-base font-bold text-slate-900">
+                  <span>সর্বমোট প্রদেয় মূল্য:</span>
+                  <span className="text-primary-hover font-heading">
+                    {formatCurrency(grandTotal)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Body: Tab 2 - Official Printable Invoice */}
+        {modalTab === 'invoice' && (
+          <div className="overflow-y-auto p-4 sm:p-8 bg-slate-100/50 print:bg-white print:p-0">
+            {/* The printable invoice element */}
+            <article
+              id="invoice-printable"
+              className="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white p-6 sm:p-10 shadow-sm print:max-w-none print:border-none print:shadow-none print:p-0"
+            >
+              {/* Invoice Header */}
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between border-b border-slate-200 pb-6">
+                <div>
+                  <h2 className="font-heading text-2xl sm:text-3xl font-extrabold text-slate-900">
+                    {COMPANY.name}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    {COMPANY.legalName}
+                    <br />
+                    {COMPANY.address}
+                    <br />
+                    হটলাইন: {COMPANY.hotline} | {COMPANY.email}
+                  </p>
+                </div>
+
+                <div className="text-left sm:text-right">
+                  <span className="inline-block rounded-md bg-dark px-3 py-1 font-heading text-sm font-bold uppercase tracking-widest text-white">
+                    INVOICE / ক্যাশ মেমো
+                  </span>
+                  <p className="mt-2 text-xs text-slate-500">
+                    চালান নম্বর: <strong className="text-slate-900 font-mono">{order.id}</strong>
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    তারিখ: <strong className="text-slate-900">{formatDate(order.date)}</strong>
+                  </p>
+                  <p className="text-xs text-slate-500">
+                    কুরিয়ার:{' '}
+                    <strong className="text-slate-900">{courier.courierName}</strong>
+                  </p>
+                </div>
+              </div>
+
+              {/* Billed To / Shipping Address */}
+              <div className="grid grid-cols-2 gap-4 py-5 border-b border-slate-200 text-xs sm:text-sm">
+                <div>
+                  <p className="font-heading text-xs font-bold uppercase tracking-wider text-slate-400">
+                    বিলিং ও প্রাপকের বিবরণ
+                  </p>
+                  <p className="mt-1 font-bold text-slate-900 text-sm">
+                    {order.customerName || user?.name || 'গ্রাহক'}
+                  </p>
+                  <p className="text-slate-600 font-mono mt-0.5">
+                    ফোন: {order.phone || user?.phone || '—'}
+                  </p>
+                  <p className="text-slate-600 mt-0.5">
+                    ইমেইল: {user?.email || '—'}
+                  </p>
+                </div>
+
+                <div className="text-right">
+                  <p className="font-heading text-xs font-bold uppercase tracking-wider text-slate-400">
+                    ডেলিভারি ঠিকানা ও কুরিয়ার
+                  </p>
+                  <p className="mt-1 font-medium text-slate-800">
+                    {order.address || user?.address || '—'}
+                  </p>
+                  <p className="text-slate-600 font-mono text-xs mt-0.5">
+                    ট্র্যাকিং আইডি: <strong>{courier.consignmentId}</strong>
+                  </p>
+                  <p className="text-slate-600 text-xs mt-0.5">
+                    পেমেন্ট:{' '}
+                    <strong className="uppercase">
+                      {order.paymentMethod || 'ক্যাশ অন ডেলিভারি'}
+                    </strong>
+                  </p>
+                </div>
+              </div>
+
+              {/* Invoice Items Table */}
+              <div className="mt-5 overflow-x-auto">
+                <table className="w-full text-left text-xs sm:text-sm">
+                  <thead>
+                    <tr className="border-b-2 border-slate-300 bg-slate-50 text-xs font-bold text-slate-700">
+                      <th className="py-2.5 px-3 w-10 text-center">নং</th>
+                      <th className="py-2.5 px-3">পুস্তকের নাম ও বিবরণ</th>
+                      <th className="py-2.5 px-3 w-20 text-center">পরিমাণ</th>
+                      <th className="py-2.5 px-3 w-24 text-right">একক মূল্য</th>
+                      <th className="py-2.5 px-3 w-28 text-right">মোট টাকা</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200">
+                    {items.map((item, index) => (
+                      <tr key={index}>
+                        <td className="py-3 px-3 text-center text-slate-500 font-mono">
+                          {toBnNum(index + 1)}
+                        </td>
+                        <td className="py-3 px-3">
+                          <p className="font-bold text-slate-900">{item.title}</p>
+                          <p className="text-xs text-slate-500">লেখক: {item.author}</p>
+                        </td>
+                        <td className="py-3 px-3 text-center font-bold text-slate-800 font-mono">
+                          {toBnNum(item.quantity)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-medium text-slate-700">
+                          {formatCurrency(item.price)}
+                        </td>
+                        <td className="py-3 px-3 text-right font-bold text-slate-900">
+                          {formatCurrency(item.price * item.quantity)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Invoice Calculations */}
+              <div className="mt-6 flex flex-col sm:flex-row items-start justify-between gap-4 border-t border-slate-200 pt-4">
+                <div className="text-xs text-slate-500 max-w-sm">
+                  <p className="font-bold text-slate-700">শর্তাবলী ও নিয়মাবলী:</p>
+                  <p className="mt-1 leading-relaxed">
+                    ১. প্রাপ্ত বইয়ে কোনো মুদ্রণ বা বাঁধাই ত্রুটি থাকলে ৭ দিনের মধ্যে পরিবর্তনযোগ্য।
+                    <br />
+                    ২. এটি একটি স্বয়ংক্রিয় কম্পিউটার জেনারেটেড ইনভয়েস, কোনো স্বাক্ষরের প্রয়োজন নেই।
+                  </p>
+                </div>
+
+                <div className="w-full sm:w-64 space-y-1.5 text-xs sm:text-sm">
+                  <div className="flex justify-between text-slate-600">
+                    <span>মোট পণ্যের মূল্য:</span>
+                    <span className="font-medium">{formatCurrency(subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-slate-600">
+                    <span>কুরিয়ার ডেলিভারি ফি:</span>
+                    <span className="font-medium">{formatCurrency(deliveryCharge)}</span>
+                  </div>
+                  {discount > 0 && (
+                    <div className="flex justify-between text-emerald-600 font-medium">
+                      <span>ছাড় / ডিসকাউন্ট:</span>
+                      <span>- {formatCurrency(discount)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between border-t-2 border-slate-900 pt-2 text-base font-bold text-slate-900">
+                    <span>সর্বমোট টাকা:</span>
+                    <span className="font-heading">{formatCurrency(grandTotal)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Invoice Footer / Signatures */}
+              <div className="mt-12 flex items-center justify-between border-t border-dashed border-slate-200 pt-6 text-xs text-slate-400">
+                <p>হসন্ত প্রকাশনের বই বেছে নেওয়ার জন্য ধন্যবাদ।</p>
+                <div className="text-right">
+                  <p className="font-heading font-semibold text-slate-700">অনুমোদিত স্বাক্ষর</p>
+                  <p className="text-[10px]">হসন্ত প্রকাশন অথরিটি</p>
+                </div>
+              </div>
+            </article>
+          </div>
+        )}
+
+        {/* Modal Bottom Actions */}
+        <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6 print:hidden">
+          <p className="text-xs text-slate-500">
+            অর্ডার স্ট্যাটাস:{' '}
+            <strong className="text-slate-800">{courier.courierStatusText}</strong>
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-dark px-4 py-2 text-xs font-bold text-white transition hover:bg-slate-800"
+            >
+              <FiPrinter />
+              <span>ইনভয়েস প্রিন্ট / ডাউনলোড</span>
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
+            >
+              বন্ধ করুন
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /* User Profile Details View                                          */
 /* ------------------------------------------------------------------ */
 
 function UserDetailsView({ user, onBack, allOrders, allBooks }) {
   const [activeTab, setActiveTab] = useState('orders');
+  const [selectedOrderForModal, setSelectedOrderForModal] = useState(null);
 
   // Filter orders of this user
   const userOrders = useMemo(() => {
@@ -335,10 +1019,12 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                     <tr className="border-b border-slate-100 text-xs font-semibold text-slate-500">
                       <th className="pb-3 pr-4">অর্ডার আইডি</th>
                       <th className="pb-3 pr-4">তারিখ</th>
+                      <th className="pb-3 pr-4">কুরিয়ার ও ট্র্যাকিং</th>
                       <th className="pb-3 pr-4">আইটেম বিবরণ</th>
                       <th className="pb-3 pr-4 text-right">মোট টাকা</th>
                       <th className="pb-3 pr-4 text-center">পেমেন্ট</th>
-                      <th className="pb-3 text-right">স্ট্যাটাস</th>
+                      <th className="pb-3 pr-4 text-center">স্ট্যাটাস</th>
+                      <th className="pb-3 text-right">পদক্ষেপ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -347,13 +1033,30 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                         (sum, i) => sum + (i.quantity || i.qty || 1),
                         0
                       );
+                      const courier = getCourierInfo(order);
+
                       return (
-                        <tr key={order.id} className="transition hover:bg-slate-50/70">
-                          <td className="py-3.5 pr-4 font-mono font-medium text-slate-900">
-                            {order.id}
+                        <tr
+                          key={order.id}
+                          onClick={() => setSelectedOrderForModal(order)}
+                          className="transition hover:bg-slate-50/80 cursor-pointer group"
+                        >
+                          <td className="py-3.5 pr-4 font-mono font-bold text-slate-900 group-hover:text-primary-hover">
+                            <span className="flex items-center gap-1.5">
+                              <span>{order.id}</span>
+                              <FiExternalLink className="text-xs text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </span>
                           </td>
                           <td className="whitespace-nowrap py-3.5 pr-4 text-xs text-slate-500">
                             {formatDate(order.date)}
+                          </td>
+                          <td className="whitespace-nowrap py-3.5 pr-4">
+                            <p className="text-xs font-bold text-slate-800">
+                              {courier.courierName}
+                            </p>
+                            <span className="font-mono text-[11px] text-slate-400">
+                              {courier.consignmentId}
+                            </span>
                           </td>
                           <td className="py-3.5 pr-4">
                             <p className="max-w-xs truncate text-xs font-medium text-slate-800">
@@ -371,8 +1074,21 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                               {order.paymentMethod || 'COD'}
                             </span>
                           </td>
-                          <td className="whitespace-nowrap py-3.5 text-right">
+                          <td className="whitespace-nowrap py-3.5 pr-4 text-center">
                             <StatusBadge status={order.status} />
+                          </td>
+                          <td className="whitespace-nowrap py-3.5 text-right">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedOrderForModal(order);
+                              }}
+                              className="inline-flex items-center gap-1 rounded-lg bg-primary/15 px-2.5 py-1 text-xs font-bold text-dark transition hover:bg-primary hover:scale-105"
+                            >
+                              <FiEye />
+                              <span>চালান ও বিবরণ</span>
+                            </button>
                           </td>
                         </tr>
                       );
@@ -497,6 +1213,16 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
           </div>
         )}
       </div>
+
+      {/* Selected Order Details & Invoice Modal */}
+      {selectedOrderForModal && (
+        <OrderDetailsInvoiceModal
+          order={selectedOrderForModal}
+          user={user}
+          allBooks={allBooks}
+          onClose={() => setSelectedOrderForModal(null)}
+        />
+      )}
     </div>
   );
 }
@@ -627,6 +1353,19 @@ function UsersManagement() {
         title="ব্যবহারকারী ব্যবস্থাপনা"
         description="নিবন্ধিত সকল গ্রাহকদের তালিকা, ফোন নাম্বার, ইমেইল, ডেলিভারি রেট, মোট অর্ডার ও উইশলিস্ট তথ্য।"
       />
+
+      {/* Navigation Tab to Counter Sales */}
+      <div className="flex flex-wrap items-center gap-2 border-b border-dark/10 pb-3">
+        <span className="rounded-xl border border-primary bg-primary px-4 py-2 text-xs font-bold text-dark shadow-2xs flex items-center gap-1.5">
+          <FiUsers /> গ্রাহক তালিকা (Users)
+        </span>
+        <Link
+          to="/dashboard/counter-orders"
+          className="rounded-xl border border-dark/10 bg-white px-4 py-2 text-xs font-bold text-dark/70 hover:bg-cream hover:text-dark transition shadow-2xs flex items-center gap-1.5"
+        >
+          <FiShoppingBag className="text-sm" /> Counter Sales
+        </Link>
+      </div>
 
       {/* 4 Summary Cards */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

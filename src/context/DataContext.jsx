@@ -376,7 +376,30 @@ export function DataProvider({ children }) {
     return { success: true, book }
   }
 
-  return <DataContext.Provider value={{ orders, books, stockHistory, reviews, notifications, updateOrderStatus, updateBookStock, addBook, createOrder, cancelOrder, markPaymentVerified, addReview, updateReview, deleteReview, toggleHelpful, reportReview, getBookReviews, getBookRatingStats, markNotificationRead }}>{children}</DataContext.Provider>
+  const updateBook = (bookId, updates) => {
+    const nextBooks = books.map((b) =>
+      String(b.id) === String(bookId)
+        ? {
+            ...b,
+            ...updates,
+            id: b.id,
+            updatedAt: new Date().toISOString(),
+          }
+        : b
+    )
+    setBooks(nextBooks)
+    saveStoredBooks(nextBooks)
+    return { success: true }
+  }
+
+  const deleteBook = (bookId) => {
+    const nextBooks = books.filter((b) => String(b.id) !== String(bookId))
+    setBooks(nextBooks)
+    saveStoredBooks(nextBooks)
+    return { success: true }
+  }
+
+  return <DataContext.Provider value={{ orders, books, stockHistory, reviews, notifications, updateOrderStatus, updateBookStock, addBook, updateBook, deleteBook, createOrder, cancelOrder, markPaymentVerified, addReview, updateReview, deleteReview, toggleHelpful, reportReview, getBookReviews, getBookRatingStats, markNotificationRead }}>{children}</DataContext.Provider>
 }
 
 export default DataContext

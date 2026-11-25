@@ -3,6 +3,7 @@ import { Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from '../common/ProtectedRoute'
 
 const UsersManagement = lazy(() => import('../../pages/dashboard/admin/UsersManagement'))
+const ShopManagement = lazy(() => import('../../pages/dashboard/admin/ShopManagement'))
 const AuthorManagement = lazy(() => import('../../pages/dashboard/admin/AuthorManagement'))
 const TotalCost = lazy(() => import('../../pages/dashboard/admin/TotalCost'))
 const Reports = lazy(() => import('../../pages/dashboard/admin/Reports'))
@@ -47,6 +48,22 @@ export const adminRoutes = (
       element={
         <ProtectedRoute allowedRoles={['admin']}>
           <UsersManagement scope="users" />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/dashboard/all-users/shops"
+      element={
+        <ProtectedRoute allowedRoles={['admin']}>
+          <ShopManagement />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/dashboard/all-users/shops/:id"
+      element={
+        <ProtectedRoute allowedRoles={['admin']}>
+          <ShopManagement />
         </ProtectedRoute>
       }
     />

@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { FiEye, FiEdit2, FiTrash2 } from 'react-icons/fi';
+import toast from 'react-hot-toast';
 import DataTable from '../../../components/dashboard/DataTable';
 import PageHeader from '../../../components/dashboard/PageHeader';
 import StatusBadge from '../../../components/dashboard/StatusBadge';
+import ConfirmModal from '../../../components/dashboard/ConfirmModal';
 import { useData } from '../../../context/useData';
 
 const formatTaka = value =>
@@ -128,9 +132,9 @@ const DUMMY_HISTORY = [
 
 function StatCard({ label, value, hint }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
+    <div className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:px-5 sm:py-4">
       <p className="text-xs font-medium text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900">
+      <p className="mt-1 break-words text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
         {value}
       </p>
       {hint && <p className="mt-0.5 text-xs text-slate-400">{hint}</p>}
@@ -140,7 +144,10 @@ function StatCard({ label, value, hint }) {
 
 function Tabs({ active, onChange, tabs }) {
   return (
-    <div role="tablist" className="flex gap-6 border-b border-slate-200">
+    <div
+      role="tablist"
+      className="flex gap-4 overflow-x-auto border-b border-slate-200 [scrollbar-width:none] sm:gap-6 [&::-webkit-scrollbar]:hidden"
+    >
       {tabs.map(tab => {
         const isActive = tab.id === active;
         return (
@@ -149,7 +156,7 @@ function Tabs({ active, onChange, tabs }) {
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(tab.id)}
-            className={`-mb-px flex items-center gap-2 border-b-2 pb-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+            className={`-mb-px flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 pb-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
               isActive
                 ? 'border-indigo-600 text-indigo-700'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -177,13 +184,13 @@ function Tabs({ active, onChange, tabs }) {
 function MarginBadge({ wholesale, sale }) {
   const w = Number(wholesale || 0);
   const s = Number(sale || 0);
-  if (!w || !s) return <span className="text-xs text-slate-400">—</span>;
+  if (!w || !s) return <span className="text-xs text-slate-400">N/A</span>;
   const profit = s - w;
   const percent = (profit / w) * 100;
   const positive = profit >= 0;
   return (
     <span
-      className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${
+      className={`inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold ${
         positive ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
       }`}
     >
@@ -205,276 +212,12 @@ const ACTION_LABELS = {
   deleted: 'Deleted',
 };
 
-function AddBookModal({ open, onClose, onSubmit, categories }) {
-  const [form, setForm] = useState(emptyForm);
-  const [error, setError] = useState('');
-
-  if (!open) return null;
-
-  const salePreview = calcSale(form.retailPrice, form.offer);
-  const set = key => event =>
-    setForm(prev => ({ ...prev, [key]: event.target.value }));
-
-  const handleSubmit = event => {
-    event.preventDefault();
-    if (!form.title.trim() || !form.author.trim()) {
-      setError('Book title and author name are required.');
-      return;
-    }
-    if (Number(form.offer) < 0 || Number(form.offer) > 100) {
-      setError('Offer must be between 0% and 100%.');
-      return;
-    }
-    if (salePreview < Number(form.wholesalePrice || 0)) {
-      setError(
-        'Sale price is lower than wholesale price. Reduce the offer or raise the retail price.',
-      );
-      return;
-    }
-    onSubmit({
-      ...form,
-      title: form.title.trim(),
-      author: form.author.trim(),
-      category: form.category.trim() || 'Uncategorized',
-      sku: form.sku.trim(),
-      wholesalePrice: Number(form.wholesalePrice || 0),
-      retailPrice: Number(form.retailPrice || 0),
-      offer: Number(form.offer || 0),
-      salePrice: salePreview,
-      price: salePreview,
-      stock: Number(form.stock || 0),
-    });
-    setForm(emptyForm);
-    setError('');
-    onClose();
-  };
-
-  const inputClass =
-    'w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100';
-  const labelClass = 'mb-1.5 block text-sm font-medium text-slate-700';
-
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
-      onMouseDown={event => event.target === event.currentTarget && onClose()}
-    >
-      <form
-        onSubmit={handleSubmit}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="add-book-title"
-        className="w-full max-w-xl rounded-2xl bg-white shadow-xl"
-      >
-        <div className="flex items-start justify-between border-b border-slate-100 px-6 py-5">
-          <div>
-            <h2
-              id="add-book-title"
-              className="text-lg font-semibold text-slate-900"
-            >
-              Add book
-            </h2>
-            <p className="mt-0.5 text-sm text-slate-500">
-              Add a new book to the catalog.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-          >
-            ✕
-          </button>
-        </div>
-
-        <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
-          <div className="sm:col-span-2">
-            <label className={labelClass} htmlFor="book-title">
-              Book title
-            </label>
-            <input
-              id="book-title"
-              className={inputClass}
-              value={form.title}
-              onChange={set('title')}
-              placeholder="e.g. Pother Pachali"
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="book-author">
-              Author
-            </label>
-            <input
-              id="book-author"
-              className={inputClass}
-              value={form.author}
-              onChange={set('author')}
-              placeholder="Author name"
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="book-category">
-              Category
-            </label>
-            <input
-              id="book-category"
-              list="book-categories"
-              className={inputClass}
-              value={form.category}
-              onChange={set('category')}
-              placeholder="Select or type"
-            />
-            <datalist id="book-categories">
-              {categories.map(category => (
-                <option key={category} value={category} />
-              ))}
-            </datalist>
-          </div>
-          <div className="sm:col-span-2">
-            <label className={labelClass} htmlFor="book-sku">
-              SKU / ISBN
-            </label>
-            <input
-              id="book-sku"
-              className={inputClass}
-              value={form.sku}
-              onChange={set('sku')}
-              placeholder="Example: HP-0001 or 978-984-9851-01-1"
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="book-wholesale">
-              Wholesale price (৳)
-            </label>
-            <input
-              id="book-wholesale"
-              type="number"
-              min="0"
-              className={inputClass}
-              value={form.wholesalePrice}
-              onChange={set('wholesalePrice')}
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="book-retail">
-              Retail price (৳)
-            </label>
-            <input
-              id="book-retail"
-              type="number"
-              min="0"
-              className={inputClass}
-              value={form.retailPrice}
-              onChange={set('retailPrice')}
-              placeholder="0"
-            />
-          </div>
-          <div className="sm:col-span-2">
-            <label className={labelClass} htmlFor="book-offer">
-              Offer (%)
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-              {OFFER_PRESETS.map(value => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() =>
-                    setForm(prev => ({ ...prev, offer: String(value) }))
-                  }
-                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    Number(form.offer) === value
-                      ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                      : 'border-slate-300 text-slate-600 hover:bg-slate-50'
-                  }`}
-                >
-                  {value === 0 ? 'No offer' : `${value}%`}
-                </button>
-              ))}
-              <input
-                id="book-offer"
-                type="number"
-                min="0"
-                max="100"
-                className={`${inputClass} !w-24`}
-                value={form.offer}
-                onChange={set('offer')}
-                aria-label="Custom offer percentage"
-              />
-            </div>
-            <div className="mt-3 flex items-center justify-between rounded-lg bg-slate-50 px-4 py-3 text-sm">
-              <span className="text-slate-500">Sale price (auto)</span>
-              <span className="font-semibold text-slate-900">
-                {formatTaka(salePreview)}
-              </span>
-            </div>
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="book-stock">
-              Stock
-            </label>
-            <input
-              id="book-stock"
-              type="number"
-              min="0"
-              className={inputClass}
-              value={form.stock}
-              onChange={set('stock')}
-              placeholder="0"
-            />
-          </div>
-          <div>
-            <label className={labelClass} htmlFor="book-status">
-              Status
-            </label>
-            <select
-              id="book-status"
-              className={inputClass}
-              value={form.status}
-              onChange={set('status')}
-            >
-              <option value="draft">Draft</option>
-              <option value="pending">Pending</option>
-              <option value="published">Published</option>
-            </select>
-          </div>
-          {error && (
-            <p
-              className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700 sm:col-span-2"
-              role="alert"
-            >
-              {error}
-            </p>
-          )}
-        </div>
-
-        <div className="flex justify-end gap-3 rounded-b-2xl border-t border-slate-100 bg-slate-50 px-6 py-4">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
-          >
-            Save book
-          </button>
-        </div>
-      </form>
-    </div>
-  );
-}
-
 /* ---------- Main view ---------- */
 
 function BooksView() {
-  // `addBook` and `bookEditHistory` are optional: wire them up in your DataContext.
-  const { books, addBook, bookEditHistory } = useData();
+  const { books, bookEditHistory, deleteBook } = useData();
   const [activeTab, setActiveTab] = useState('catalog');
-  const [modalOpen, setModalOpen] = useState(false);
+  const [bookToDelete, setBookToDelete] = useState(null);
 
   const categories = useMemo(
     () => [...new Set(books.map(book => book.category))],
@@ -500,6 +243,20 @@ function BooksView() {
     if (typeof addBook === 'function') addBook(payload);
   };
 
+  const handleConfirmDelete = () => {
+    if (!bookToDelete) return;
+    try {
+      if (typeof deleteBook === 'function') {
+        deleteBook(bookToDelete.id);
+      }
+      toast.success(`"${bookToDelete.title}" has been deleted.`);
+    } catch {
+      toast.error('Failed to delete book');
+    } finally {
+      setBookToDelete(null);
+    }
+  };
+
   return (
     <>
       <PageHeader
@@ -508,8 +265,8 @@ function BooksView() {
       />
 
       {/* Summary + primary action */}
-      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-stretch">
-        <div className="grid flex-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:gap-4 lg:flex-row lg:items-stretch">
+        <div className="grid flex-1 grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
           <StatCard
             label="Total titles"
             value={books.length}
@@ -531,13 +288,13 @@ function BooksView() {
             hint="5 copies or fewer"
           />
         </div>
-        <button
-          onClick={() => setModalOpen(true)}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 lg:self-start"
+        <Link
+          to="/dashboard/books/new"
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-dark shadow-xs transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 lg:w-auto lg:self-start"
         >
           <span className="text-lg leading-none">+</span>
           Add book
-        </button>
+        </Link>
       </div>
 
       <Tabs
@@ -549,180 +306,260 @@ function BooksView() {
         ]}
       />
 
-      <div className="mt-6">
+      <div className="mt-5 min-w-0 sm:mt-6">
         {activeTab === 'catalog' ? (
-          <DataTable
-            title="Book Catalog"
-            data={books}
-            searchKeys={['title', 'author', 'category']}
-            searchPlaceholder="Search title, author, or category..."
-            filters={[
-              {
-                key: 'category',
-                label: 'All Categories',
-                options: categories.map(category => ({
-                  value: category,
-                  label: category,
-                })),
-              },
-              {
-                key: 'status',
-                label: 'All Statuses',
-                options: [
-                  { value: 'published', label: 'Published' },
-                  { value: 'pending', label: 'Pending' },
-                  { value: 'draft', label: 'Draft' },
-                ],
-              },
-            ]}
-            columns={[
-              {
-                key: 'title',
-                header: 'Book Details',
-                sortable: true,
-                render: book => (
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={book.cover}
-                      alt=""
-                      className="h-12 w-9 rounded-md border border-slate-200 object-cover"
-                    />
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-slate-900">
-                        {book.title}
-                      </p>
-                      <p className="truncate text-xs text-slate-500">
-                        {book.author}
-                      </p>
+          // Keeps the wide table scrolling inside this box instead of
+          // stretching the whole page sideways on small screens.
+          <div className="max-w-full overflow-x-auto">
+            <DataTable
+              title="Book Catalog"
+              data={books}
+              searchKeys={['title', 'author', 'category']}
+              searchPlaceholder="Search title, author, or category..."
+              filters={[
+                {
+                  key: 'category',
+                  label: 'All Categories',
+                  options: categories.map(category => ({
+                    value: category,
+                    label: category,
+                  })),
+                },
+                {
+                  key: 'status',
+                  label: 'All Statuses',
+                  options: [
+                    { value: 'published', label: 'Published' },
+                    { value: 'pending', label: 'Pending' },
+                    { value: 'draft', label: 'Draft' },
+                  ],
+                },
+              ]}
+              columns={[
+                {
+                  key: 'title',
+                  header: 'Book Details',
+                  // sortable: true,
+                  render: book => (
+                    <div className="flex min-w-[180px] items-center gap-3">
+                      <img
+                        src={book.cover}
+                        alt=""
+                        className="h-12 w-9 shrink-0 rounded-md border border-slate-200 object-cover"
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold ">
+                          {book.title}
+                        </p>
+                        <p className="truncate text-xs text-slate-500">
+                          {book.author}
+                        </p>
+                      </div>
                     </div>
-                  </div>
-                ),
-              },
-              {
-                key: 'category',
-                header: 'Category',
-                sortable: true,
-                render: book => (
-                  <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-                    {book.category}
-                  </span>
-                ),
-              },
-              {
-                key: 'wholesalePrice',
-                header: 'Wholesale Price',
-                sortable: true,
-                sortValue: book => Number(book.wholesalePrice || 0),
-                render: book => (
-                  <span className="font-medium text-slate-700">
-                    {formatTaka(book.wholesalePrice)}
-                  </span>
-                ),
-              },
-              {
-                key: 'retailPrice',
-                header: 'Retail Price',
-                sortable: true,
-                sortValue: book => getRetail(book),
-                render: book => (
-                  <span
-                    className={
-                      getOffer(book)
-                        ? 'text-slate-400 line-through'
-                        : 'font-medium text-slate-700'
-                    }
-                  >
-                    {formatTaka(getRetail(book))}
-                  </span>
-                ),
-              },
-              {
-                key: 'offer',
-                header: 'Offer',
-                sortable: true,
-                sortValue: book => getOffer(book),
-                render: book =>
-                  getOffer(book) ? (
-                    <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                      {getOffer(book)}% OFF
-                    </span>
-                  ) : (
-                    <span className="text-xs text-slate-400">—</span>
                   ),
-              },
-              {
-                key: 'salePrice',
-                header: 'Sale Price',
-                sortable: true,
-                sortValue: book => getSale(book),
-                render: book => (
-                  <span className="font-semibold text-slate-900">
-                    {formatTaka(getSale(book))}
-                  </span>
-                ),
-              },
-              {
-                key: 'profit',
-                header: 'Profit',
-                sortable: true,
-                sortValue: book =>
-                  getSale(book) - Number(book.wholesalePrice || 0),
-                render: book => (
-                  <MarginBadge
-                    wholesale={book.wholesalePrice}
-                    sale={getSale(book)}
-                  />
-                ),
-              },
-              {
-                key: 'stock',
-                header: 'Stock',
-                sortable: true,
-                sortValue: book => Number(book.stock || 0),
-                render: book => {
-                  const stock = Number(book.stock || 0);
-                  return (
+                },
+                {
+                  key: 'category',
+                  header: 'Category',
+                  // sortable: true,
+                  render: book => (
+                    <span className="whitespace-nowrap rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
+                      {book.category}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'wholesalePrice',
+                  header: 'Wholesale Price',
+                  // sortable: true,
+                  sortValue: book => Number(book.wholesalePrice || 0),
+                  render: book => (
+                    <span className="whitespace-nowrap font-medium text-slate-700">
+                      {formatTaka(book.wholesalePrice)}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'retailPrice',
+                  header: 'Retail Price',
+                  // sortable: true,
+                  sortValue: book => getRetail(book),
+                  render: book => (
                     <span
-                      className={`text-sm font-semibold ${
-                        stock === 0
-                          ? 'text-rose-600'
-                          : stock <= 5
-                            ? 'text-amber-600'
-                            : 'text-slate-700'
+                      className={`whitespace-nowrap ${
+                        getOffer(book)
+                          ? 'text-slate-400 line-through'
+                          : 'font-medium text-slate-700'
                       }`}
                     >
-                      {stock}
+                      {formatTaka(getRetail(book))}
                     </span>
-                  );
+                  ),
                 },
-              },
-              {
-                key: 'status',
-                header: 'Status',
-                render: book => <StatusBadge status={book.status} />,
-              },
-            ]}
-            emptyMessage="No books found. Use “Add book” to create the first one."
-          />
+                {
+                  key: 'offer',
+                  header: 'Offer',
+                  // sortable: true,
+                  sortValue: book => getOffer(book),
+                  render: book =>
+                    getOffer(book) ? (
+                      <span className="whitespace-nowrap rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                        {getOffer(book)}% OFF
+                      </span>
+                    ) : (
+                      <span className="text-xs text-slate-400">N/A</span>
+                    ),
+                },
+                {
+                  key: 'salePrice',
+                  header: 'Sale Price',
+                  // sortable: true,
+                  sortValue: book => getSale(book),
+                  render: book => (
+                    <span className="whitespace-nowrap font-semibold text-slate-900">
+                      {formatTaka(getSale(book))}
+                    </span>
+                  ),
+                },
+                {
+                  key: 'profit',
+                  header: 'Profit',
+                  // sortable: true,
+                  sortValue: book =>
+                    getSale(book) - Number(book.wholesalePrice || 0),
+                  render: book => (
+                    <MarginBadge
+                      wholesale={book.wholesalePrice}
+                      sale={getSale(book)}
+                    />
+                  ),
+                },
+                {
+                  key: 'stock',
+                  header: 'Stock',
+                  // sortable: true,
+                  sortValue: book => Number(book.stock || 0),
+                  render: book => {
+                    const stock = Number(book.stock || 0);
+                    return (
+                      <span
+                        className={`text-sm font-semibold ${
+                          stock === 0
+                            ? 'text-rose-600'
+                            : stock <= 5
+                              ? 'text-amber-600'
+                              : 'text-slate-700'
+                        }`}
+                      >
+                        {stock}
+                      </span>
+                    );
+                  },
+                },
+                {
+                  key: 'status',
+                  header: 'Status',
+                  render: book => <StatusBadge status={book.status} />,
+                },
+                {
+                  key: 'actions',
+                  header: 'Actions',
+                  render: book => (
+                    <div className="flex items-center gap-1.5">
+                      <Link
+                        to={`/dashboard/books/${book.id}`}
+                        className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+                        title="View Book Details"
+                        aria-label={`View ${book.title}`}
+                      >
+                        <FiEye className="text-base" />
+                      </Link>
+                      <Link
+                        to={`/dashboard/books/edit/${book.id}`}
+                        className="rounded-lg p-1.5 text-slate-500 transition hover:bg-amber-50 hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                        title="Edit Book"
+                        aria-label={`Edit ${book.title}`}
+                      >
+                        <FiEdit2 className="text-base" />
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={() => setBookToDelete(book)}
+                        className="rounded-lg p-1.5 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                        title="Delete Book"
+                        aria-label={`Delete ${book.title}`}
+                      >
+                        <FiTrash2 className="text-base" />
+                      </button>
+                    </div>
+                  ),
+                },
+              ]}
+              emptyMessage="No books found. Use “Add book” to create the first one."
+            />
+          </div>
         ) : (
           <EditHistoryTable history={history} />
         )}
       </div>
 
-      <AddBookModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSubmit={handleAddBook}
-        categories={categories}
+      <ConfirmModal
+        isOpen={Boolean(bookToDelete)}
+        title="Delete Book?"
+        message={`Are you sure you want to delete "${bookToDelete?.title}"? This action will permanently remove the book from the catalog.`}
+        confirmLabel="Delete Book"
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setBookToDelete(null)}
       />
     </>
+  );
+}
+
+/* ---------- Edit history: cards on mobile, table on >= md ---------- */
+
+function ChangeList({ changes }) {
+  if (!changes?.length) {
+    return <span className="text-xs text-slate-400">—</span>;
+  }
+  return (
+    <ul className="space-y-0.5">
+      {changes.map((change, i) => (
+        <li key={i} className="text-xs">
+          <span className="font-medium text-slate-700">{change.field}:</span>{' '}
+          <span className="text-slate-400 line-through">
+            {String(change.from ?? '—')}
+          </span>{' '}
+          <span className="text-slate-800">{String(change.to ?? '—')}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function ActionBadge({ action }) {
+  return (
+    <span
+      className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
+        ACTION_STYLES[action] || 'bg-slate-100 text-slate-600'
+      }`}
+    >
+      {ACTION_LABELS[action] || action}
+    </span>
+  );
+}
+
+function Avatar({ name }) {
+  return (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
+      {(name || '?').slice(0, 1).toUpperCase()}
+    </span>
   );
 }
 
 function EditHistoryTable({ history }) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-5 py-4">
+      <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
         <h3 className="text-base font-semibold text-slate-900">Edit History</h3>
         <p className="mt-0.5 text-sm text-slate-500">
           See who changed which book, and when.
@@ -737,77 +574,92 @@ function EditHistoryTable({ history }) {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-left text-sm">
-            <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
-              <tr>
-                <th className="px-5 py-3">Date &amp; Time</th>
-                <th className="px-5 py-3">Edited By</th>
-                <th className="px-5 py-3">Book</th>
-                <th className="px-5 py-3">Action</th>
-                <th className="px-5 py-3">Changes</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {history.map((entry, index) => (
-                <tr key={entry.id ?? index} className="hover:bg-slate-50/60">
-                  <td className="whitespace-nowrap px-5 py-3.5 text-slate-600">
-                    {formatDateTime(entry.editedAt)}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <div className="flex items-center gap-2.5">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
-                        {(entry.editedBy || '?').slice(0, 1).toUpperCase()}
-                      </span>
-                      <div>
-                        <p className="font-medium text-slate-800">
-                          {entry.editedBy || 'Unknown'}
-                        </p>
-                        {entry.role && (
-                          <p className="text-xs text-slate-400">{entry.role}</p>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-5 py-3.5 font-medium text-slate-800">
+        <>
+          {/* Mobile: cards */}
+          <ul className="divide-y divide-slate-100 md:hidden">
+            {history.map((entry, index) => (
+              <li key={entry.id ?? index} className="space-y-3 px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="min-w-0 break-words font-medium text-slate-900">
                     {entry.bookTitle}
-                  </td>
-                  <td className="px-5 py-3.5">
-                    <span
-                      className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
-                        ACTION_STYLES[entry.action] ||
-                        'bg-slate-100 text-slate-600'
-                      }`}
-                    >
-                      {ACTION_LABELS[entry.action] || entry.action}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3.5 text-slate-600">
-                    {entry.changes?.length ? (
-                      <ul className="space-y-0.5">
-                        {entry.changes.map((change, i) => (
-                          <li key={i} className="text-xs">
-                            <span className="font-medium text-slate-700">
-                              {change.field}:
-                            </span>{' '}
-                            <span className="text-slate-400 line-through">
-                              {String(change.from ?? '—')}
-                            </span>{' '}
-                            <span className="text-slate-800">
-                              {String(change.to ?? '—')}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
-                  </td>
+                  </p>
+                  <ActionBadge action={entry.action} />
+                </div>
+
+                <div className="flex items-center gap-2.5">
+                  <Avatar name={entry.editedBy} />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-slate-800">
+                      {entry.editedBy || 'Unknown'}
+                      {entry.role && (
+                        <span className="ml-1.5 text-xs font-normal text-slate-400">
+                          {entry.role}
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {formatDateTime(entry.editedAt)}
+                    </p>
+                  </div>
+                </div>
+
+                {entry.changes?.length > 0 && (
+                  <div className="rounded-lg bg-slate-50 px-3 py-2">
+                    <ChangeList changes={entry.changes} />
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+
+          {/* Tablet / desktop: table */}
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[720px] text-left text-sm">
+              <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                <tr>
+                  <th className="px-5 py-3">Date &amp; Time</th>
+                  <th className="px-5 py-3">Edited By</th>
+                  <th className="px-5 py-3">Book</th>
+                  <th className="px-5 py-3">Action</th>
+                  <th className="px-5 py-3">Changes</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {history.map((entry, index) => (
+                  <tr key={entry.id ?? index} className="hover:bg-slate-50/60">
+                    <td className="whitespace-nowrap px-5 py-3.5 text-slate-600">
+                      {formatDateTime(entry.editedAt)}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar name={entry.editedBy} />
+                        <div>
+                          <p className="font-medium text-slate-800">
+                            {entry.editedBy || 'Unknown'}
+                          </p>
+                          {entry.role && (
+                            <p className="text-xs text-slate-400">
+                              {entry.role}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5 font-medium text-slate-800">
+                      {entry.bookTitle}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <ActionBadge action={entry.action} />
+                    </td>
+                    <td className="px-5 py-3.5 text-slate-600">
+                      <ChangeList changes={entry.changes} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

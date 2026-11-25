@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FiCalendar, FiEye, FiPlus, FiPrinter, FiX } from 'react-icons/fi';
+import { FiCalendar, FiEye, FiPlus, FiPrinter, FiShoppingBag, FiX } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 import DataTable from '../../../../components/dashboard/DataTable';
 import { useData } from '../../../../context/useData';
@@ -7,6 +7,8 @@ import { formatCurrency } from '../../../../utils/format';
 import CashMemoModal from './CashMemoModal';
 import { initialCounterOrders } from './dummyData';
 import OrderDetailsModal from './OrderDetailsModal';
+import AddShopModal from '../../../../components/dashboard/AddShopModal';
+import ShopManagement from '../../admin/ShopManagement';
 
 const TODAY_DATE = new Date().toISOString().slice(0, 10);
 
@@ -29,6 +31,8 @@ const formatDay = day =>
 export default function CounterOrders() {
   const { orders } = useData();
 
+  const [activeMainTab, setActiveMainTab] = useState('orders'); // 'orders' | 'shops'
+  const [isAddShopOpen, setIsAddShopOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'today', 'paid', 'due'
   const [dateFrom, setDateFrom] = useState(''); // '' = no start limit, else YYYY-MM-DD
   const [dateTo, setDateTo] = useState(''); // '' = no end limit, else YYYY-MM-DD
@@ -324,7 +328,7 @@ export default function CounterOrders() {
 
   return (
     <div className="space-y-6">
-      {/* Top Header with Action Button */}
+      {/* Top Header with Action Buttons */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="font-heading text-2xl font-bold text-slate-900">
@@ -335,16 +339,60 @@ export default function CounterOrders() {
           </p>
         </div>
 
-        <Link
-          to="/dashboard/counter-orders/new"
-          className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-dark transition hover:bg-primary-hover shadow-xs"
-        >
-          <FiPlus size={16} />
-          <span>New Counter Order</span>
-        </Link>
+        <div className="flex items-center gap-2">
+          {/* দোকান এড করো বাটন */}
+          <button
+            type="button"
+            onClick={() => setIsAddShopOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-dark/15 bg-white px-3.5 py-2 text-xs font-bold text-dark transition hover:bg-cream hover:border-dark/30 shadow-xs"
+          >
+            <FiShoppingBag size={15} className="text-primary" />
+            <span>দোকান এড করুন</span>
+          </button>
+
+          <Link
+            to="/dashboard/counter-orders/new"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-dark transition hover:bg-primary-hover shadow-xs"
+          >
+            <FiPlus size={16} />
+            <span>New Counter Order</span>
+          </Link>
+        </div>
       </div>
 
-      {/* KPI Cards */}
+      {/* Main View Tabs */}
+      <div className="flex border-b border-dark/10 bg-white px-3 rounded-xl shadow-2xs">
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('orders')}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-bold transition ${
+            activeMainTab === 'orders'
+              ? 'border-primary text-dark'
+              : 'border-transparent text-dark/60 hover:text-dark'
+          }`}
+        >
+          <FiCalendar size={14} /> কাউন্টার সেলস চালান
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('shops')}
+          className={`flex items-center gap-2 border-b-2 px-4 py-2.5 text-xs font-bold transition ${
+            activeMainTab === 'shops'
+              ? 'border-primary text-dark'
+              : 'border-transparent text-dark/60 hover:text-dark'
+          }`}
+        >
+          <FiShoppingBag size={14} /> দোকান ও গ্রাহক প্রোফাইল
+        </button>
+      </div>
+
+      {activeMainTab === 'shops' ? (
+        <div className="pt-2">
+          <ShopManagement embedded={true} />
+        </div>
+      ) : (
+        <>
+          {/* KPI Cards */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-2xs">
           <span className="text-xs font-medium text-slate-500 block">
@@ -518,6 +566,8 @@ export default function CounterOrders() {
         }
         onRowClick={order => setSelectedDetailsOrder(order)}
       />
+        </>
+      )}
 
       {/* Modals */}
       {selectedDetailsOrder && (
@@ -534,6 +584,15 @@ export default function CounterOrders() {
           onClose={() => setSelectedInvoiceOrder(null)}
         />
       )}
+
+      {/* Add Shop Modal */}
+      <AddShopModal
+        isOpen={isAddShopOpen}
+        onClose={() => setIsAddShopOpen(false)}
+        onCreated={() => {
+          setActiveMainTab('shops');
+        }}
+      />
     </div>
   );
 }

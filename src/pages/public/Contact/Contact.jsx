@@ -253,7 +253,7 @@ function FormField({
         onChange={onChange}
         placeholder={placeholder}
         rows={textarea ? 4 : undefined}
-        className={`w-full rounded-md border bg-cream px-3 py-2 text-sm text-dark outline-none transition focus:outline-none focus:ring-0 ${
+        className={`w-full rounded-md border bg-cream px-3 py-2 text-sm text-dark outline-none transition focus:outline-none focus-visible:outline-none focus:ring-0 focus-visible:ring-0 ${
           error
             ? 'border-red-500 focus:border-red-500'
             : 'border-dark/10 focus:border-primary'

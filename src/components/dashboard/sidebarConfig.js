@@ -42,6 +42,12 @@ export const sidebarConfig = {
           permission: PERMISSIONS.MANAGE_USERS,
         },
         {
+          label: 'Shop',
+          path: '/dashboard/all-users/shops',
+          icon: FiShoppingBag,
+          permission: PERMISSIONS.MANAGE_USERS,
+        },
+        {
           label: 'Roles',
           path: '/dashboard/all-users/roles',
           icon: FiSettings,
