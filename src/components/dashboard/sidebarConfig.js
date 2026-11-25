@@ -1,5 +1,6 @@
 import {
   FiBookOpen,
+  FiBookmark,
   FiClipboard,
   FiDollarSign,
   FiFileText,
@@ -65,6 +66,12 @@ export const sidebarConfig = {
       label: 'All Books',
       path: '/dashboard/books',
       icon: FiBookOpen,
+      permission: PERMISSIONS.BOOKS_READ,
+    },
+    {
+      label: 'Publishers',
+      path: '/dashboard/publishers',
+      icon: FiBookmark,
       permission: PERMISSIONS.BOOKS_READ,
     },
     {
@@ -224,6 +231,12 @@ export const sidebarConfig = {
       label: 'Book Catalog',
       path: '/dashboard/books',
       icon: FiBookOpen,
+      permission: PERMISSIONS.BOOKS_READ,
+    },
+    {
+      label: 'Publishers',
+      path: '/dashboard/publishers',
+      icon: FiBookmark,
       permission: PERMISSIONS.BOOKS_READ,
     },
   ],

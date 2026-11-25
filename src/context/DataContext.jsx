@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import ordersSeed from '../data/orders'
 import reviewsSeed from '../data/reviews'
+import { initialPublishers } from '../data/publishers'
 import { getStoredBooks, saveStoredBooks } from '../utils/authorStorage'
 import { hasPermission, PERMISSIONS } from '../utils/roles'
 import { addActivityLog } from '../utils/moderationStorage'
@@ -10,6 +11,7 @@ const ORDERS_KEY = 'hosonta_orders'
 const STOCK_HISTORY_KEY = 'hosonta_stock_history'
 const REVIEWS_KEY = 'hosonta_reviews'
 const NOTIFICATIONS_KEY = 'hosonta_notifications'
+const PUBLISHERS_KEY = 'hosonta_publishers'
 const statusOrder = ['new', 'processing', 'shipped', 'delivered']
 
 function readStorage(key, fallback) {
@@ -22,8 +24,9 @@ function readStorage(key, fallback) {
 }
 
 function getStockedBooks() {
-  return getStoredBooks().map((book) => ({
+  return getStoredBooks().map((book, idx) => ({
     ...book,
+    publisher: book.publisher || (idx % 3 === 1 ? 'সেরা পাবলিকেশন' : 'হসন্ত প্রকাশন'),
     stock: Number.isFinite(Number(book.stock)) ? Number(book.stock) : 0,
     lowStockLimit: Number.isFinite(Number(book.lowStockLimit)) ? Number(book.lowStockLimit) : 5,
     isbn: book.isbn || book.sku || `HP-${String(book.id).padStart(4, '0')}`,
@@ -67,6 +70,52 @@ export function DataProvider({ children }) {
   const [stockHistory, setStockHistory] = useState(() => readStorage(STOCK_HISTORY_KEY, []))
   const [reviews, setReviews] = useState(getStoredReviews)
   const [notifications, setNotifications] = useState(() => readStorage(NOTIFICATIONS_KEY, []))
+  const [publishers, setPublishers] = useState(() => {
+    const stored = readStorage(PUBLISHERS_KEY, initialPublishers)
+    const missing = initialPublishers.filter(
+      (init) => !stored.some((item) => item.name === init.name || item.id === init.id)
+    )
+    return [...stored, ...missing]
+  })
+
+  const savePublishers = (nextPublishers) => {
+    setPublishers(nextPublishers)
+    try {
+      localStorage.setItem(PUBLISHERS_KEY, JSON.stringify(nextPublishers))
+    } catch (err) {
+      console.error('Failed to save publishers', err)
+    }
+  }
+
+  const addPublisher = (input) => {
+    const id = input.id || `pub-${Date.now()}`
+    const newPublisher = {
+      ...input,
+      id,
+      name: (input.name || '').trim(),
+      status: input.status || 'active',
+      createdAt: new Date().toISOString(),
+    }
+    const nextList = [...publishers, newPublisher]
+    savePublishers(nextList)
+    return { success: true, publisher: newPublisher }
+  }
+
+  const updatePublisher = (id, updates) => {
+    const nextList = publishers.map((pub) =>
+      pub.id === id || pub.name === id
+        ? { ...pub, ...updates, updatedAt: new Date().toISOString() }
+        : pub
+    )
+    savePublishers(nextList)
+    return { success: true }
+  }
+
+  const deletePublisher = (id) => {
+    const nextList = publishers.filter((pub) => pub.id !== id && pub.name !== id)
+    savePublishers(nextList)
+    return { success: true }
+  }
 
   const saveReviews = (nextReviews) => {
     setReviews(nextReviews)
@@ -363,6 +412,7 @@ export function DataProvider({ children }) {
     const book = {
       ...bookInput,
       id,
+      publisher: bookInput.publisher || 'হসন্ত প্রকাশন',
       sku,
       isbn: String(bookInput.isbn || sku).trim(),
       stock: Number(bookInput.stock || 0),
@@ -399,7 +449,7 @@ export function DataProvider({ children }) {
     return { success: true }
   }
 
-  return <DataContext.Provider value={{ orders, books, stockHistory, reviews, notifications, updateOrderStatus, updateBookStock, addBook, updateBook, deleteBook, createOrder, cancelOrder, markPaymentVerified, addReview, updateReview, deleteReview, toggleHelpful, reportReview, getBookReviews, getBookRatingStats, markNotificationRead }}>{children}</DataContext.Provider>
+  return <DataContext.Provider value={{ orders, books, stockHistory, reviews, notifications, publishers, addPublisher, updatePublisher, deletePublisher, updateOrderStatus, updateBookStock, addBook, updateBook, deleteBook, createOrder, cancelOrder, markPaymentVerified, addReview, updateReview, deleteReview, toggleHelpful, reportReview, getBookReviews, getBookRatingStats, markNotificationRead }}>{children}</DataContext.Provider>
 }
 
 export default DataContext

@@ -12,7 +12,7 @@ import {
   FiAlertCircle,
   FiImage,
 } from 'react-icons/fi';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../../context/useData';
 
@@ -31,12 +31,14 @@ const DEFAULT_CATEGORIES = [
   'Essays & Articles',
 ];
 
-const DEFAULT_PUBLISHERS = ['Hosonta Prokashon', 'হসন্ত প্রকাশন', 'সেরা পাবলিকেশন'];
+const DEFAULT_PUBLISHERS = ['হসন্ত প্রকাশন', 'সেরা পাবলিকেশন', 'Hosonta Prokashon'];
 
 export default function AddBook() {
-  const { addBook, updateBook, books = [] } = useData();
+  const { addBook, updateBook, books = [], publishers = [] } = useData();
   const navigate = useNavigate();
   const { id: editBookId } = useParams();
+  const [searchParams] = useSearchParams();
+  const urlPublisher = searchParams.get('publisher');
 
   const isEditMode = Boolean(editBookId);
   const existingBook = useMemo(() => {
@@ -51,10 +53,12 @@ export default function AddBook() {
   }, [books, existingBook]);
 
   const publisherOptions = useMemo(() => {
-    const set = new Set([...DEFAULT_PUBLISHERS, ...books.map(b => b.publisher).filter(Boolean)]);
+    const fromContext = (publishers || []).map(p => p.name);
+    const set = new Set([...fromContext, ...DEFAULT_PUBLISHERS, ...books.map(b => b.publisher).filter(Boolean)]);
     if (existingBook?.publisher) set.add(existingBook.publisher);
+    if (urlPublisher) set.add(urlPublisher);
     return Array.from(set);
-  }, [books, existingBook]);
+  }, [publishers, books, existingBook, urlPublisher]);
 
   const fileInputRef = useRef(null);
   const pdfInputRef = useRef(null);
@@ -63,13 +67,19 @@ export default function AddBook() {
   const [productName, setProductName] = useState('');
   const [category, setCategory] = useState('Novel');
   const [customCategory, setCustomCategory] = useState('');
-  const [publisher, setPublisher] = useState('Hosonta Prokashon');
+  const [publisher, setPublisher] = useState(urlPublisher || 'হসন্ত প্রকাশন');
   const [customPublisher, setCustomPublisher] = useState('');
   const [authorName, setAuthorName] = useState('');
   const [totalPages, setTotalPages] = useState('150');
   const [coverType, setCoverType] = useState('Paperback');
   const [publishingYear, setPublishingYear] = useState('2026');
   const [description, setDescription] = useState('');
+
+  useEffect(() => {
+    if (urlPublisher && !isEditMode) {
+      setPublisher(urlPublisher);
+    }
+  }, [urlPublisher, isEditMode]);
 
   // Form state matching Image 2: Pricing & Availability
   const [price, setPrice] = useState('350.00');

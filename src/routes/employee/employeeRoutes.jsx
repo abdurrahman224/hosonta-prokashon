@@ -25,6 +25,9 @@ const AddBook = lazy(
 const BookDetailsDashboard = lazy(
   () => import('../../pages/dashboard/employee/BookDetailsDashboard'),
 );
+const PublishersManagement = lazy(
+  () => import('../../pages/dashboard/admin/PublishersManagement'),
+);
 
 export const employeeRoutes = (
   <>
@@ -57,6 +60,14 @@ export const employeeRoutes = (
       element={
         <ProtectedRoute allowedRoles={['admin', 'employee', 'author']}>
           <BookDetailsDashboard />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/dashboard/publishers"
+      element={
+        <ProtectedRoute allowedRoles={['admin', 'employee']}>
+          <PublishersManagement />
         </ProtectedRoute>
       }
     />

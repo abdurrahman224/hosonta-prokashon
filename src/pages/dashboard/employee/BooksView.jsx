@@ -215,7 +215,7 @@ const ACTION_LABELS = {
 /* ---------- Main view ---------- */
 
 function BooksView() {
-  const { books, bookEditHistory, deleteBook } = useData();
+  const { books, bookEditHistory, deleteBook, publishers = [] } = useData();
   const [activeTab, setActiveTab] = useState('catalog');
   const [bookToDelete, setBookToDelete] = useState(null);
 
@@ -223,6 +223,14 @@ function BooksView() {
     () => [...new Set(books.map(book => book.category))],
     [books],
   );
+
+  const publisherOptions = useMemo(() => {
+    const fromContext = publishers.map(p => p.name);
+    const fromBooks = books.map(b => b.publisher).filter(Boolean);
+    const set = new Set([...fromContext, ...fromBooks, 'হসন্ত প্রকাশন', 'সেরা পাবলিকেশন']);
+    return Array.from(set);
+  }, [publishers, books]);
+
   const history = bookEditHistory?.length ? bookEditHistory : DUMMY_HISTORY;
 
   const stats = useMemo(() => {
@@ -314,9 +322,21 @@ function BooksView() {
             <DataTable
               title="Book Catalog"
               data={books}
-              searchKeys={['title', 'author', 'category']}
-              searchPlaceholder="Search title, author, or category..."
+              searchKeys={['title', 'author', 'category', 'publisher']}
+              searchPlaceholder="Search title, author, category, or publisher..."
               filters={[
+                {
+                  key: 'publisher',
+                  label: 'All Publishers',
+                  options: publisherOptions.map(pub => ({
+                    value: pub,
+                    label: pub,
+                  })),
+                  predicate: (book, selectedPublisher) => {
+                    const pub = book.publisher || 'হসন্ত প্রকাশন';
+                    return pub === selectedPublisher;
+                  },
+                },
                 {
                   key: 'category',
                   label: 'All Categories',
@@ -341,19 +361,22 @@ function BooksView() {
                   header: 'Book Details',
                   // sortable: true,
                   render: book => (
-                    <div className="flex min-w-[180px] items-center gap-3">
+                    <div className="flex min-w-[200px] items-center gap-3">
                       <img
                         src={book.cover}
                         alt=""
                         className="h-12 w-9 shrink-0 rounded-md border border-slate-200 object-cover"
                       />
                       <div className="min-w-0">
-                        <p className="truncate font-semibold ">
+                        <p className="truncate font-semibold text-slate-900">
                           {book.title}
                         </p>
                         <p className="truncate text-xs text-slate-500">
                           {book.author}
                         </p>
+                        <span className="mt-0.5 inline-block truncate text-[11px] font-medium text-amber-700">
+                          {book.publisher || 'হসন্ত প্রকাশন'}
+                        </span>
                       </div>
                     </div>
                   ),

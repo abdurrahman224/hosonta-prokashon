@@ -4,6 +4,7 @@ import ProtectedRoute from '../common/ProtectedRoute'
 
 const UsersManagement = lazy(() => import('../../pages/dashboard/admin/UsersManagement'))
 const ShopManagement = lazy(() => import('../../pages/dashboard/admin/ShopManagement'))
+const PublishersManagement = lazy(() => import('../../pages/dashboard/admin/PublishersManagement'))
 const AuthorManagement = lazy(() => import('../../pages/dashboard/admin/AuthorManagement'))
 const TotalCost = lazy(() => import('../../pages/dashboard/admin/TotalCost'))
 const Reports = lazy(() => import('../../pages/dashboard/admin/Reports'))
@@ -72,6 +73,14 @@ export const adminRoutes = (
       element={
         <ProtectedRoute allowedRoles={['admin']}>
           <UsersManagement scope="roles" />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/dashboard/publishers"
+      element={
+        <ProtectedRoute allowedRoles={['admin', 'employee']}>
+          <PublishersManagement />
         </ProtectedRoute>
       }
     />

@@ -529,7 +529,7 @@ function StockManagement() {
                 {
                   key: 'title',
                   header: 'Book Details',
-                  sortable: true,
+                  // sortable: true,
                   width: '240px',
                   render: book => (
                     <div className="flex min-w-[220px] items-center gap-3">
@@ -563,14 +563,14 @@ function StockManagement() {
                 {
                   key: 'category',
                   header: 'Category',
-                  sortable: true,
+                  // sortable: true,
                   width: '145px',
                   cellClassName: 'whitespace-normal break-words',
                 },
                 {
                   key: 'price',
                   header: 'Unit Price',
-                  sortable: true,
+                  // sortable: true,
                   width: '110px',
                   align: 'right',
                   sortValue: book => Number(book.price || 0),
@@ -580,7 +580,7 @@ function StockManagement() {
                 {
                   key: 'stock',
                   header: 'Current Stock',
-                  sortable: true,
+                  // sortable: true,
                   width: '145px',
                   sortValue: book => Number(book.stock || 0),
                   render: book => {
@@ -613,7 +613,7 @@ function StockManagement() {
                 {
                   key: 'lowStockLimit',
                   header: 'Alert Limit',
-                  sortable: true,
+                  // sortable: true,
                   width: '110px',
                   align: 'center',
                   sortValue: book => Number(book.lowStockLimit || 0),
@@ -624,7 +624,7 @@ function StockManagement() {
                   width: '120px',
                   align: 'center',
                   sortValue: book => Number(book.stock || 0),
-                  sortable: true,
+                  // sortable: true,
                   render: book => {
                     const style = STATUS_STYLE[getStatus(book)];
                     return (
@@ -639,7 +639,7 @@ function StockManagement() {
                 {
                   key: 'stockValue',
                   header: 'Stock Value',
-                  sortable: true,
+                  // sortable: true,
                   width: '120px',
                   align: 'right',
                   sortValue: book =>
