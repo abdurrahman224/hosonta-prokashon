@@ -230,7 +230,7 @@ export function addStoredShop(newShop) {
     ...newShop,
     id: newShop.id || `shop-${Date.now()}`,
     established: newShop.established || String(new Date().getFullYear()),
-    category: newShop.category || 'বুকশপ ও রিটেইল গ্রাহক',
+    category: newShop.category || 'Bookshop & Retail Customer',
     status: newShop.status || 'active',
     defaultCommission: Number(newShop.defaultCommission || 30),
     initialDue: Number(newShop.initialDue || 0),

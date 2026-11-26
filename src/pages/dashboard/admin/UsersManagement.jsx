@@ -31,24 +31,32 @@ import PageHeader from '../../../components/dashboard/PageHeader';
 import StatusBadge from '../../../components/dashboard/StatusBadge';
 import { useAuth } from '../../../context/useAuth';
 import { useData } from '../../../context/useData';
-import { formatCurrency } from '../../../utils/format';
 
 /* ------------------------------------------------------------------ */
 /* Constants & Helpers                                                 */
 /* ------------------------------------------------------------------ */
 
 const COMPANY = {
-  name: 'হসন্ত প্রকাশন',
+  name: 'Hosonta Prokashon',
   legalName: 'Hosonta Prokashon',
-  address: '৩৮/২ মান্নান বাজার (২য় তলা), বাংলাবাজার, ঢাকা-১১০০',
-  hotline: '০১৬২৮-০৩৭৫৯১',
+  address: '38/2 Mannan Market (2nd Floor), Banglabazar, Dhaka-1100',
+  hotline: '01628-037591',
   email: 'support@hosontoprokashon.com',
   website: 'www.hosontoprokashon.com',
 };
 
-const toBnNum = (value) => {
+const toEnDigits = (value) => {
   const bnDigits = '০১২৩৪৫৬৭৮৯';
-  return String(value ?? '').replace(/\d/g, (d) => bnDigits[Number(d)]);
+  return String(value ?? '').replace(/[০-৯]/g, (d) =>
+    String(bnDigits.indexOf(d))
+  );
+};
+
+const formatCurrency = (value) => {
+  const num = Number(value || 0);
+  return `৳${num.toLocaleString('en-US', {
+    maximumFractionDigits: 2,
+  })}`;
 };
 
 const formatDate = (isoString) => {
@@ -56,8 +64,8 @@ const formatDate = (isoString) => {
   try {
     const d = new Date(isoString);
     if (Number.isNaN(d.getTime())) return isoString;
-    return d.toLocaleDateString('bn-BD', {
-      day: 'numeric',
+    return d.toLocaleDateString('en-GB', {
+      day: '2-digit',
       month: 'short',
       year: 'numeric',
     });
@@ -65,6 +73,17 @@ const formatDate = (isoString) => {
     return isoString;
   }
 };
+
+const getRoleLabel = (role) => {
+  if (role === 'admin') return 'Admin';
+  if (role === 'author') return 'Author';
+  if (role === 'moderator') return 'Moderator';
+  if (role === 'employee') return 'Employee';
+  return 'Customer';
+};
+
+const toUserRouteParam = (name = '') =>
+  encodeURIComponent(String(name).trim().replace(/\s+/g, '-'));
 
 function readWishlistIds(userId) {
   try {
@@ -89,9 +108,9 @@ function resolveOrderItem(item, allBooks = []) {
       matchedBook?.cover ||
       matchedBook?.image ||
       'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=400&q=80',
-    title: item.title || matchedBook?.title || 'বইয়ের নাম',
-    author: item.author || matchedBook?.author || 'লেখক',
-    category: item.category || matchedBook?.category || 'সাহিত্য',
+    title: item.title || matchedBook?.title || 'Book Title',
+    author: item.author || matchedBook?.author || 'Author',
+    category: item.category || matchedBook?.category || 'Literature',
     price: Number(item.price ?? matchedBook?.price ?? 0),
     quantity: Number(item.quantity ?? item.qty ?? 1),
   };
@@ -102,7 +121,7 @@ function getCourierInfo(order) {
   const isCounter = order.orderType === 'counter';
   const courierName =
     order.courier ||
-    (isCounter ? 'কাউন্টার ডেলিভারি / শোরুম' : 'Steadfast Courier');
+    (isCounter ? 'Counter Delivery / Showroom' : 'Steadfast Courier');
 
   const consignmentId =
     order.consignmentId ||
@@ -111,23 +130,23 @@ function getCourierInfo(order) {
       ? `CNT-${order.id.slice(-6)}`
       : `STD-${order.id.replace(/[^\d]/g, '').slice(-8) || '84930215'}`);
 
-  let courierStatusText = 'প্রক্রিয়াকরণ চলছে';
+  let courierStatusText = 'Processing';
   let badgeColor = 'bg-amber-50 text-amber-700 ring-amber-200/60';
 
   if (order.status === 'delivered') {
-    courierStatusText = 'ডেলিভারি সম্পন্ন (Delivered)';
+    courierStatusText = 'Delivered';
     badgeColor = 'bg-emerald-50 text-emerald-700 ring-emerald-200/60';
   } else if (order.status === 'shipped') {
-    courierStatusText = 'ইন ট্রানজিট - ডেলিভারির জন্য প্রেরিত (Out for Delivery)';
+    courierStatusText = 'In Transit - Out for Delivery';
     badgeColor = 'bg-blue-50 text-blue-700 ring-blue-200/60';
   } else if (order.status === 'processing') {
-    courierStatusText = 'পার্সেল প্রস্তুত ও বুকিং সম্পন্ন (Booked)';
+    courierStatusText = 'Parcel Packed & Booked';
     badgeColor = 'bg-indigo-50 text-indigo-700 ring-indigo-200/60';
   } else if (order.status === 'cancelled') {
-    courierStatusText = 'বাতিল / রিটার্ন করা হয়েছে (Cancelled/Returned)';
+    courierStatusText = 'Cancelled / Returned';
     badgeColor = 'bg-rose-50 text-rose-700 ring-rose-200/60';
   } else {
-    courierStatusText = 'অর্ডার বুকিং অপেক্ষমান (Pending Pickup)';
+    courierStatusText = 'Pending Pickup';
   }
 
   return {
@@ -165,10 +184,10 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
 
   const courier = getCourierInfo(order);
 
-  const handleCopy = (text, label = 'আইডি') => {
+  const handleCopy = (text, label = 'ID') => {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(text);
-      toast.success(`${label} কপি করা হয়েছে!`);
+      toast.success(`${label} copied!`);
     }
   };
 
@@ -214,15 +233,15 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
         <div className="flex flex-wrap items-center justify-between border-b border-slate-200 bg-slate-50/70 px-4 py-3 sm:px-6 print:hidden">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-heading text-sm sm:text-base font-bold text-slate-900">
-              অর্ডার বিবরণ ও চালান
+              Order Details & Invoice
             </span>
             <span className="font-mono text-xs font-semibold text-primary-hover bg-primary/10 px-2 py-0.5 rounded">
               {order.id}
             </span>
             <button
               type="button"
-              onClick={() => handleCopy(order.id, 'অর্ডার আইডি')}
-              title="কপি করুন"
+              onClick={() => handleCopy(order.id, 'Order ID')}
+              title="Copy"
               className="rounded p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200"
             >
               <FiCopy className="text-xs" />
@@ -242,7 +261,7 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                অর্ডার ও কুরিয়ার তথ্য
+                Order & Courier Info
               </button>
               <button
                 type="button"
@@ -253,7 +272,7 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                ইনভয়েস / ক্যাশ মেমো
+                Invoice / Cash Memo
               </button>
             </div>
 
@@ -264,7 +283,7 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
               className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-dark transition hover:bg-primary-hover shadow-xs"
             >
               <FiPrinter className="text-sm" />
-              <span className="hidden sm:inline">প্রিন্ট ইনভয়েস</span>
+              <span className="hidden sm:inline">Print Invoice</span>
             </button>
 
             {/* Close button */}
@@ -291,7 +310,7 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                        কুরিয়ার ও ডেলিভারি পার্টনার
+                        Courier & Delivery Partner
                       </p>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[11px] font-bold ring-1 ${courier.badgeColor}`}
@@ -307,7 +326,7 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
 
                 <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 sm:text-right">
                   <p className="text-[11px] font-medium text-slate-400">
-                    কনসাইনমেন্ট / ট্র্যাকিং নম্বর
+                    Consignment / Tracking Number
                   </p>
                   <div className="mt-0.5 flex items-center gap-1.5 sm:justify-end">
                     <span className="font-mono text-sm font-bold text-slate-800">
@@ -316,9 +335,9 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
                     <button
                       type="button"
                       onClick={() =>
-                        handleCopy(courier.consignmentId, 'ট্র্যাকিং কোড')
+                        handleCopy(courier.consignmentId, 'Tracking Code')
                       }
-                      title="কপি করুন"
+                      title="Copy"
                       className="text-slate-400 hover:text-primary-hover"
                     >
                       <FiCopy className="text-xs" />
@@ -334,7 +353,7 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
                     <FiCheckCircle />
                   </span>
                   <div>
-                    <p className="text-xs font-bold text-slate-900">অর্ডার গ্রহণ</p>
+                    <p className="text-xs font-bold text-slate-900">Order Placed</p>
                     <p className="text-[10px] text-slate-500">{formatDate(order.date)}</p>
                   </div>
                 </div>
@@ -350,8 +369,8 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
                     <FiCheckCircle />
                   </span>
                   <div>
-                    <p className="text-xs font-bold text-slate-900">প্যাকেজিং সম্পন্ন</p>
-                    <p className="text-[10px] text-slate-500">স্টক বরাদ্দ</p>
+                    <p className="text-xs font-bold text-slate-900">Packaging Complete</p>
+                    <p className="text-[10px] text-slate-500">Stock Allocated</p>
                   </div>
                 </div>
 
@@ -366,7 +385,7 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
                     <FiTruck />
                   </span>
                   <div>
-                    <p className="text-xs font-bold text-slate-900">কুরিয়ারে হস্তান্তর</p>
+                    <p className="text-xs font-bold text-slate-900">Handed to Courier</p>
                     <p className="text-[10px] text-slate-500">{courier.courierName}</p>
                   </div>
                 </div>
@@ -392,27 +411,27 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
                   <div>
                     <p className="text-xs font-bold text-slate-900">
                       {order.status === 'delivered'
-                        ? 'ডেলিভারি সম্পন্ন'
+                        ? 'Delivered'
                         : order.status === 'cancelled'
-                        ? 'অর্ডার বাতিল'
-                        : 'ডেলিভারি অপেক্ষমান'}
+                        ? 'Order Cancelled'
+                        : 'Pending Delivery'}
                     </p>
                     <p className="text-[10px] text-slate-500">
-                      {order.status === 'delivered' ? 'গ্রাহক গ্রহণ করেছেন' : 'প্রক্রিয়াধীন'}
+                      {order.status === 'delivered' ? 'Received by customer' : 'In progress'}
                     </p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Books Ordered List Section (তিনি কোন বই গুলো নিয়েছেন) */}
+            {/* Books Ordered List Section */}
             <div>
               <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
                 <h4 className="font-heading text-sm sm:text-base font-bold text-slate-900">
-                  অর্ডারকৃত বইসমূহ ({toBnNum(totalItemCount)}টি বই)
+                  Ordered Books ({totalItemCount} {totalItemCount === 1 ? 'Book' : 'Books'})
                 </h4>
                 <span className="text-xs font-medium text-slate-500">
-                  আইটেম সংখ্যা: {toBnNum(items.length)}টি
+                  Total Items: {items.length}
                 </span>
               </div>
 
@@ -433,7 +452,7 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
                           {item.title}
                         </h5>
                         <p className="text-xs text-slate-500 truncate">
-                          লেখক: {item.author}
+                          Author: {item.author}
                         </p>
                         <span className="inline-block mt-0.5 rounded bg-slate-100 px-1.5 py-0.2 text-[10px] font-medium text-slate-600">
                           {item.category}
@@ -444,10 +463,10 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
                     <div className="flex items-center gap-5 shrink-0 text-right">
                       <div>
                         <p className="text-xs text-slate-500">
-                          একক মূল্য: {formatCurrency(item.price)}
+                          Unit Price: {formatCurrency(item.price)}
                         </p>
                         <p className="text-xs font-semibold text-slate-800">
-                          পরিমাণ: {toBnNum(item.quantity)} কপি
+                          Qty: {item.quantity} {item.quantity === 1 ? 'copy' : 'copies'}
                         </p>
                       </div>
                       <div className="w-20 text-right font-heading text-sm font-bold text-slate-900">
@@ -464,35 +483,35 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
               {/* Shipping & Customer Information */}
               <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2.5 text-xs sm:text-sm">
                 <h5 className="font-heading text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
-                  গ্রাহক ও ডেলিভারি বিবরণ
+                  Customer & Delivery Details
                 </h5>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">গ্রাহকের নাম:</span>
+                  <span className="text-slate-500">Customer Name:</span>
                   <span className="font-semibold text-slate-900">
-                    {order.customerName || user?.name || 'গ্রাহক'}
+                    {order.customerName || user?.name || 'Customer'}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">মোবাইল নাম্বার:</span>
+                  <span className="text-slate-500">Phone Number:</span>
                   <span className="font-mono font-semibold text-slate-900">
-                    {order.phone || user?.phone || '—'}
+                    {toEnDigits(order.phone || user?.phone || '—')}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">ডেলিভারি ঠিকানা:</span>
+                  <span className="text-slate-500">Delivery Address:</span>
                   <span className="max-w-[200px] text-right font-medium text-slate-800">
                     {order.address || user?.address || '—'}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">অর্ডার তারিখ:</span>
+                  <span className="text-slate-500">Order Date:</span>
                   <span className="font-medium text-slate-800">
                     {formatDate(order.date)}
                   </span>
                 </div>
                 {order.notes && (
                   <div className="pt-2 border-t border-slate-100">
-                    <span className="text-[11px] text-slate-400 block">বিশেষ নোট:</span>
+                    <span className="text-[11px] text-slate-400 block">Special Note:</span>
                     <p className="text-xs font-medium text-slate-700 mt-0.5">
                       {order.notes}
                     </p>
@@ -503,16 +522,16 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
               {/* Payment & Total Amount Calculation */}
               <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2 text-xs sm:text-sm">
                 <h5 className="font-heading text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
-                  পেমেন্ট ও হিসাব বিবরণী
+                  Payment & Summary
                 </h5>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">পেমেন্ট মাধ্যম:</span>
+                  <span className="text-slate-500">Payment Method:</span>
                   <span className="font-semibold uppercase text-slate-800">
-                    {order.paymentMethod || 'ক্যাশ অন ডেলিভারি (COD)'}
+                    {order.paymentMethod || 'Cash on Delivery (COD)'}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">পেমেন্ট স্ট্যাটাস:</span>
+                  <span className="text-slate-500">Payment Status:</span>
                   <span
                     className={`font-semibold rounded-full px-2 py-0.2 text-xs ${
                       order.paymentStatus === 'paid' || order.paymentStatus === 'verified'
@@ -521,30 +540,30 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
                     }`}
                   >
                     {order.paymentStatus === 'paid' || order.paymentStatus === 'verified'
-                      ? 'পরিশোধিত (Paid)'
-                      : 'বকেয়া / COD'}
+                      ? 'Paid'
+                      : 'Due / COD'}
                   </span>
                 </div>
                 <div className="flex justify-between pt-1">
-                  <span className="text-slate-500">আইটেম সাবটোটাল:</span>
+                  <span className="text-slate-500">Items Subtotal:</span>
                   <span className="font-medium text-slate-800">
                     {formatCurrency(subtotal)}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">কুরিয়ার ডেলিভারি চার্জ:</span>
+                  <span className="text-slate-500">Delivery Charge:</span>
                   <span className="font-medium text-slate-800">
                     {formatCurrency(deliveryCharge)}
                   </span>
                 </div>
                 {discount > 0 && (
                   <div className="flex justify-between text-emerald-600">
-                    <span>বিশেষ ছাড় / ডিসকাউন্ট:</span>
+                    <span>Discount:</span>
                     <span>- {formatCurrency(discount)}</span>
                   </div>
                 )}
                 <div className="flex justify-between border-t border-slate-200 pt-2 text-sm sm:text-base font-bold text-slate-900">
-                  <span>সর্বমোট প্রদেয় মূল্য:</span>
+                  <span>Grand Total:</span>
                   <span className="text-primary-hover font-heading">
                     {formatCurrency(grandTotal)}
                   </span>
@@ -569,26 +588,24 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
                     {COMPANY.name}
                   </h2>
                   <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                    {COMPANY.legalName}
-                    <br />
                     {COMPANY.address}
                     <br />
-                    হটলাইন: {COMPANY.hotline} | {COMPANY.email}
+                    Hotline: {COMPANY.hotline} | {COMPANY.email}
                   </p>
                 </div>
 
                 <div className="text-left sm:text-right">
                   <span className="inline-block rounded-md bg-dark px-3 py-1 font-heading text-sm font-bold uppercase tracking-widest text-white">
-                    INVOICE / ক্যাশ মেমো
+                    INVOICE / CASH MEMO
                   </span>
                   <p className="mt-2 text-xs text-slate-500">
-                    চালান নম্বর: <strong className="text-slate-900 font-mono">{order.id}</strong>
+                    Invoice No: <strong className="text-slate-900 font-mono">{order.id}</strong>
                   </p>
                   <p className="text-xs text-slate-500">
-                    তারিখ: <strong className="text-slate-900">{formatDate(order.date)}</strong>
+                    Date: <strong className="text-slate-900">{formatDate(order.date)}</strong>
                   </p>
                   <p className="text-xs text-slate-500">
-                    কুরিয়ার:{' '}
+                    Courier:{' '}
                     <strong className="text-slate-900">{courier.courierName}</strong>
                   </p>
                 </div>
@@ -598,33 +615,33 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
               <div className="grid grid-cols-2 gap-4 py-5 border-b border-slate-200 text-xs sm:text-sm">
                 <div>
                   <p className="font-heading text-xs font-bold uppercase tracking-wider text-slate-400">
-                    বিলিং ও প্রাপকের বিবরণ
+                    Billed To / Recipient
                   </p>
                   <p className="mt-1 font-bold text-slate-900 text-sm">
-                    {order.customerName || user?.name || 'গ্রাহক'}
+                    {order.customerName || user?.name || 'Customer'}
                   </p>
                   <p className="text-slate-600 font-mono mt-0.5">
-                    ফোন: {order.phone || user?.phone || '—'}
+                    Phone: {toEnDigits(order.phone || user?.phone || '—')}
                   </p>
                   <p className="text-slate-600 mt-0.5">
-                    ইমেইল: {user?.email || '—'}
+                    Email: {user?.email || '—'}
                   </p>
                 </div>
 
                 <div className="text-right">
                   <p className="font-heading text-xs font-bold uppercase tracking-wider text-slate-400">
-                    ডেলিভারি ঠিকানা ও কুরিয়ার
+                    Delivery Address & Courier
                   </p>
                   <p className="mt-1 font-medium text-slate-800">
                     {order.address || user?.address || '—'}
                   </p>
                   <p className="text-slate-600 font-mono text-xs mt-0.5">
-                    ট্র্যাকিং আইডি: <strong>{courier.consignmentId}</strong>
+                    Tracking ID: <strong>{courier.consignmentId}</strong>
                   </p>
                   <p className="text-slate-600 text-xs mt-0.5">
-                    পেমেন্ট:{' '}
+                    Payment:{' '}
                     <strong className="uppercase">
-                      {order.paymentMethod || 'ক্যাশ অন ডেলিভারি'}
+                      {order.paymentMethod || 'Cash on Delivery'}
                     </strong>
                   </p>
                 </div>
@@ -635,25 +652,25 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
                 <table className="w-full text-left text-xs sm:text-sm">
                   <thead>
                     <tr className="border-b-2 border-slate-300 bg-slate-50 text-xs font-bold text-slate-700">
-                      <th className="py-2.5 px-3 w-10 text-center">নং</th>
-                      <th className="py-2.5 px-3">পুস্তকের নাম ও বিবরণ</th>
-                      <th className="py-2.5 px-3 w-20 text-center">পরিমাণ</th>
-                      <th className="py-2.5 px-3 w-24 text-right">একক মূল্য</th>
-                      <th className="py-2.5 px-3 w-28 text-right">মোট টাকা</th>
+                      <th className="py-2.5 px-3 w-10 text-center">#</th>
+                      <th className="py-2.5 px-3">Book Title & Author</th>
+                      <th className="py-2.5 px-3 w-20 text-center">Qty</th>
+                      <th className="py-2.5 px-3 w-24 text-right">Unit Price</th>
+                      <th className="py-2.5 px-3 w-28 text-right">Total</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
                     {items.map((item, index) => (
                       <tr key={index}>
                         <td className="py-3 px-3 text-center text-slate-500 font-mono">
-                          {toBnNum(index + 1)}
+                          {index + 1}
                         </td>
                         <td className="py-3 px-3">
                           <p className="font-bold text-slate-900">{item.title}</p>
-                          <p className="text-xs text-slate-500">লেখক: {item.author}</p>
+                          <p className="text-xs text-slate-500">Author: {item.author}</p>
                         </td>
                         <td className="py-3 px-3 text-center font-bold text-slate-800 font-mono">
-                          {toBnNum(item.quantity)}
+                          {item.quantity}
                         </td>
                         <td className="py-3 px-3 text-right font-medium text-slate-700">
                           {formatCurrency(item.price)}
@@ -670,31 +687,31 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
               {/* Invoice Calculations */}
               <div className="mt-6 flex flex-col sm:flex-row items-start justify-between gap-4 border-t border-slate-200 pt-4">
                 <div className="text-xs text-slate-500 max-w-sm">
-                  <p className="font-bold text-slate-700">শর্তাবলী ও নিয়মাবলী:</p>
+                  <p className="font-bold text-slate-700">Terms & Conditions:</p>
                   <p className="mt-1 leading-relaxed">
-                    ১. প্রাপ্ত বইয়ে কোনো মুদ্রণ বা বাঁধাই ত্রুটি থাকলে ৭ দিনের মধ্যে পরিবর্তনযোগ্য।
+                    1. Books with printing or binding defects can be exchanged within 7 days.
                     <br />
-                    ২. এটি একটি স্বয়ংক্রিয় কম্পিউটার জেনারেটেড ইনভয়েস, কোনো স্বাক্ষরের প্রয়োজন নেই।
+                    2. This is a computer-generated invoice and requires no signature.
                   </p>
                 </div>
 
                 <div className="w-full sm:w-64 space-y-1.5 text-xs sm:text-sm">
                   <div className="flex justify-between text-slate-600">
-                    <span>মোট পণ্যের মূল্য:</span>
+                    <span>Subtotal:</span>
                     <span className="font-medium">{formatCurrency(subtotal)}</span>
                   </div>
                   <div className="flex justify-between text-slate-600">
-                    <span>কুরিয়ার ডেলিভারি ফি:</span>
+                    <span>Delivery Fee:</span>
                     <span className="font-medium">{formatCurrency(deliveryCharge)}</span>
                   </div>
                   {discount > 0 && (
                     <div className="flex justify-between text-emerald-600 font-medium">
-                      <span>ছাড় / ডিসকাউন্ট:</span>
+                      <span>Discount:</span>
                       <span>- {formatCurrency(discount)}</span>
                     </div>
                   )}
                   <div className="flex justify-between border-t-2 border-slate-900 pt-2 text-base font-bold text-slate-900">
-                    <span>সর্বমোট টাকা:</span>
+                    <span>Grand Total:</span>
                     <span className="font-heading">{formatCurrency(grandTotal)}</span>
                   </div>
                 </div>
@@ -702,10 +719,10 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
 
               {/* Invoice Footer / Signatures */}
               <div className="mt-12 flex items-center justify-between border-t border-dashed border-slate-200 pt-6 text-xs text-slate-400">
-                <p>হসন্ত প্রকাশনের বই বেছে নেওয়ার জন্য ধন্যবাদ।</p>
+                <p>Thank you for choosing Hosonta Prokashon.</p>
                 <div className="text-right">
-                  <p className="font-heading font-semibold text-slate-700">অনুমোদিত স্বাক্ষর</p>
-                  <p className="text-[10px]">হসন্ত প্রকাশন অথরিটি</p>
+                  <p className="font-heading font-semibold text-slate-700">Authorized Signature</p>
+                  <p className="text-[10px]">Hosonta Prokashon Authority</p>
                 </div>
               </div>
             </article>
@@ -715,7 +732,7 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
         {/* Modal Bottom Actions */}
         <div className="flex items-center justify-between border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6 print:hidden">
           <p className="text-xs text-slate-500">
-            অর্ডার স্ট্যাটাস:{' '}
+            Order Status:{' '}
             <strong className="text-slate-800">{courier.courierStatusText}</strong>
           </p>
           <div className="flex items-center gap-2">
@@ -725,14 +742,14 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
               className="inline-flex items-center gap-1.5 rounded-xl bg-dark px-4 py-2 text-xs font-bold text-white transition hover:bg-slate-800"
             >
               <FiPrinter />
-              <span>ইনভয়েস প্রিন্ট / ডাউনলোড</span>
+              <span>Print / Download Invoice</span>
             </button>
             <button
               type="button"
               onClick={onClose}
               className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-100"
             >
-              বন্ধ করুন
+              Close
             </button>
           </div>
         </div>
@@ -769,22 +786,22 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
 
   return (
     <div className="space-y-6">
-      {/* Top back button & title */}
+      {/* Top back button & User Name */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-xs ring-1 ring-slate-200/80 transition hover:bg-slate-50 hover:text-dark"
+          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
         >
           <FiArrowLeft className="text-base" />
-          <span>সকল গ্রাহক তালিকায় ফিরুন</span>
+          <span>Back to Users</span>
         </button>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500">ইউজার আইডি:</span>
-          <code className="rounded bg-slate-100 px-2 py-0.5 text-xs font-mono font-medium text-slate-700">
-            {user.id}
-          </code>
+        <div className="flex items-center justify-center gap-2">
+          <span className="text-xs text-slate-500">User Name:</span>
+          <span className="rounded bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+            {user.name}
+          </span>
         </div>
       </div>
 
@@ -808,7 +825,7 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                 className={`absolute bottom-0 right-0 h-4 w-4 rounded-full border-2 border-white ${
                   user.status === 'active' ? 'bg-emerald-500' : 'bg-rose-500'
                 }`}
-                title={user.status === 'active' ? 'সক্রিয়' : 'স্থগিত'}
+                title={user.status === 'active' ? 'Active' : 'Suspended'}
               />
             </div>
 
@@ -824,14 +841,10 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                       : 'bg-rose-50 text-rose-700'
                   }`}
                 >
-                  {user.status === 'active' ? 'সক্রিয় অ্যাকাউন্ট' : 'স্থগিত'}
+                  {user.status === 'active' ? 'Active Account' : 'Suspended'}
                 </span>
                 <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
-                  {user.role === 'admin'
-                    ? 'অ্যাডমিন'
-                    : user.role === 'author'
-                    ? 'লেখক'
-                    : 'সাধারণ গ্রাহক'}
+                  {getRoleLabel(user.role)}
                 </span>
               </div>
 
@@ -852,7 +865,7 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                       href={`tel:${user.phone}`}
                       className="font-medium text-slate-700 hover:text-primary-hover"
                     >
-                      {user.phone}
+                      {toEnDigits(user.phone)}
                     </a>
                   </span>
                 )}
@@ -873,24 +886,24 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                 href={`tel:${user.phone}`}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3.5 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
               >
-                <FiPhone /> কল করুন
+                <FiPhone /> Call
               </a>
             )}
             {user.phone && (
               <a
-                href={`https://wa.me/${user.phone.replace(/[^\d]/g, '')}`}
+                href={`https://wa.me/${toEnDigits(user.phone).replace(/[^\d]/g, '')}`}
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3.5 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
               >
-                <FaWhatsapp /> হোয়াটসঅ্যাপ
+                <FaWhatsapp /> WhatsApp
               </a>
             )}
             <a
               href={`mailto:${user.email}`}
               className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-semibold text-dark transition hover:bg-primary-hover"
             >
-              <FiMail /> ইমেইল পাঠান
+              <FiMail /> Send Email
             </a>
           </div>
         </div>
@@ -903,13 +916,13 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
               <FiShoppingBag className="text-xl" />
             </span>
-            <span className="text-[11px] font-medium text-slate-400">সর্বমোট অর্ডার</span>
+            <span className="text-[11px] font-medium text-slate-400">Total Orders</span>
           </div>
           <p className="mt-3 text-2xl font-bold text-slate-900">
-            {toBnNum(user.orderCount)} টি
+            {user.orderCount}
           </p>
           <p className="mt-0.5 text-xs text-slate-500">
-            সফল সম্পন্ন: {toBnNum(user.deliveredCount)} টি
+            Delivered: {user.deliveredCount}
           </p>
         </div>
 
@@ -918,12 +931,12 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
               <FiTrendingUp className="text-xl" />
             </span>
-            <span className="text-[11px] font-medium text-slate-400">মোট ক্রয়মূল্য</span>
+            <span className="text-[11px] font-medium text-slate-400">Total Spent</span>
           </div>
           <p className="mt-3 text-2xl font-bold text-slate-900">
             {formatCurrency(user.totalSpent)}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">মোট লেনদেনের পরিমাণ</p>
+          <p className="mt-0.5 text-xs text-slate-500">Total purchase volume</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
@@ -939,17 +952,17 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
             >
               <FiTruck className="text-xl" />
             </span>
-            <span className="text-[11px] font-medium text-slate-400">ডেলিভারি সাকসেস</span>
+            <span className="text-[11px] font-medium text-slate-400">Delivery Success</span>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-2xl font-bold text-slate-900">
-              {toBnNum(user.deliveryRate)}%
+              {user.deliveryRate}%
             </span>
             <span className="text-xs font-semibold text-emerald-600">
-              {user.deliveryRate >= 90 ? 'খুব ভালো' : 'সাধারণ'}
+              {user.deliveryRate >= 90 ? 'Excellent' : 'Average'}
             </span>
           </div>
-          <p className="mt-0.5 text-xs text-slate-500">পার্সেল গ্রহণ করার হার</p>
+          <p className="mt-0.5 text-xs text-slate-500">Parcel acceptance rate</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
@@ -957,12 +970,12 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
               <FiHeart className="text-xl" />
             </span>
-            <span className="text-[11px] font-medium text-slate-400">উইশলিস্ট সংরক্ষিত</span>
+            <span className="text-[11px] font-medium text-slate-400">Wishlist Saved</span>
           </div>
           <p className="mt-3 text-2xl font-bold text-slate-900">
-            {toBnNum(user.wishlistCount)} টি
+            {user.wishlistCount}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">পছন্দের তালিকায় রাখা বই</p>
+          <p className="mt-0.5 text-xs text-slate-500">Books saved in wishlist</p>
         </div>
       </div>
 
@@ -978,7 +991,7 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            অর্ডারের ইতিহাস ({toBnNum(userOrders.length)})
+            Order History ({userOrders.length})
           </button>
           <button
             type="button"
@@ -989,7 +1002,7 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            উইশলিস্টে থাকা বই ({toBnNum(userWishlistBooks.length)})
+            Wishlist Books ({userWishlistBooks.length})
           </button>
           <button
             type="button"
@@ -1000,7 +1013,7 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
-            ঠিকানা ও বিবরণ
+            Address & Details
           </button>
         </div>
 
@@ -1010,21 +1023,21 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
             {userOrders.length === 0 ? (
               <div className="py-12 text-center text-slate-400">
                 <FiPackage className="mx-auto text-4xl text-slate-300" />
-                <p className="mt-2 text-sm font-medium">এই ব্যবহারকারীর কোনো অর্ডার পাওয়া যায়নি।</p>
+                <p className="mt-2 text-sm font-medium">No orders found for this user.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-slate-100 text-xs font-semibold text-slate-500">
-                      <th className="pb-3 pr-4">অর্ডার আইডি</th>
-                      <th className="pb-3 pr-4">তারিখ</th>
-                      <th className="pb-3 pr-4">কুরিয়ার ও ট্র্যাকিং</th>
-                      <th className="pb-3 pr-4">আইটেম বিবরণ</th>
-                      <th className="pb-3 pr-4 text-right">মোট টাকা</th>
-                      <th className="pb-3 pr-4 text-center">পেমেন্ট</th>
-                      <th className="pb-3 pr-4 text-center">স্ট্যাটাস</th>
-                      <th className="pb-3 text-right">পদক্ষেপ</th>
+                      <th className="pb-3 pr-4">Order ID</th>
+                      <th className="pb-3 pr-4">Date</th>
+                      <th className="pb-3 pr-4">Courier & Tracking</th>
+                      <th className="pb-3 pr-4">Items</th>
+                      <th className="pb-3 pr-4 text-right">Total</th>
+                      <th className="pb-3 pr-4 text-center">Payment</th>
+                      <th className="pb-3 pr-4 text-center">Status</th>
+                      <th className="pb-3 text-right">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1060,10 +1073,10 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                           </td>
                           <td className="py-3.5 pr-4">
                             <p className="max-w-xs truncate text-xs font-medium text-slate-800">
-                              {(order.items || []).map((i) => i.title).join(', ') || 'বই অর্ডার'}
+                              {(order.items || []).map((i) => i.title).join(', ') || 'Book Order'}
                             </p>
                             <span className="text-[11px] text-slate-400">
-                              মোট {toBnNum(itemCount)}টি বই
+                              {itemCount} {itemCount === 1 ? 'Book' : 'Books'}
                             </span>
                           </td>
                           <td className="whitespace-nowrap py-3.5 pr-4 text-right font-bold text-slate-900">
@@ -1087,7 +1100,7 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                               className="inline-flex items-center gap-1 rounded-lg bg-primary/15 px-2.5 py-1 text-xs font-bold text-dark transition hover:bg-primary hover:scale-105"
                             >
                               <FiEye />
-                              <span>চালান ও বিবরণ</span>
+                              <span>View Invoice</span>
                             </button>
                           </td>
                         </tr>
@@ -1106,7 +1119,7 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
             {userWishlistBooks.length === 0 ? (
               <div className="py-12 text-center text-slate-400">
                 <FiHeart className="mx-auto text-4xl text-slate-300" />
-                <p className="mt-2 text-sm font-medium">উইশলিস্টে কোনো বই সংরক্ষিত নেই।</p>
+                <p className="mt-2 text-sm font-medium">No books saved in wishlist.</p>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
@@ -1146,29 +1159,31 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
             <div className="grid gap-6 md:grid-cols-2">
               <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
                 <h4 className="font-heading text-xs font-bold uppercase tracking-wider text-slate-500">
-                  যোগাযোগ ও ডেলিভারি ঠিকানা
+                  Contact & Delivery Address
                 </h4>
                 <div className="mt-3 space-y-2.5 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-slate-500">পূর্ণ নাম:</span>
+                    <span className="text-slate-500">Full Name:</span>
                     <span className="font-medium text-slate-900">{user.name}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">ইমেইল:</span>
+                    <span className="text-slate-500">Email:</span>
                     <span className="font-medium text-slate-900">{user.email}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">মোবাইল নাম্বার:</span>
-                    <span className="font-medium text-slate-900">{user.phone || 'দেওয়া হয়নি'}</span>
+                    <span className="text-slate-500">Phone Number:</span>
+                    <span className="font-medium text-slate-900">
+                      {user.phone ? toEnDigits(user.phone) : 'Not provided'}
+                    </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">শহর/জেলা:</span>
-                    <span className="font-medium text-slate-900">{user.city || 'ঢাকা'}</span>
+                    <span className="text-slate-500">City / District:</span>
+                    <span className="font-medium text-slate-900">{user.city || 'Dhaka'}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">বিস্তারিত ঠিকানা:</span>
+                    <span className="text-slate-500">Full Address:</span>
                     <span className="max-w-xs text-right font-medium text-slate-900">
-                      {user.address || 'তথ্য পাওয়া যায়নি'}
+                      {user.address || 'Not available'}
                     </span>
                   </div>
                 </div>
@@ -1176,35 +1191,35 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
 
               <div className="rounded-xl border border-slate-100 bg-slate-50/50 p-4">
                 <h4 className="font-heading text-xs font-bold uppercase tracking-wider text-slate-500">
-                  অ্যাকাউন্ট ও মেম্বারশিপ বিবরণ
+                  Account & Membership Details
                 </h4>
                 <div className="mt-3 space-y-2.5 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-slate-500">অ্যাকাউন্ট রোল:</span>
+                    <span className="text-slate-500">Account Role:</span>
                     <span className="font-semibold text-slate-800">
-                      {user.role === 'admin'
-                        ? 'অ্যাডমিন'
-                        : user.role === 'author'
-                        ? 'লেখক'
-                        : 'সাধারণ ক্রেতা/পাঠক'}
+                      {getRoleLabel(user.role)}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">অ্যাকাউন্ট স্ট্যাটাস:</span>
-                    <span className="font-semibold text-emerald-600">
-                      {user.status === 'active' ? 'সক্রিয় (Active)' : 'স্থগিত (Suspended)'}
+                    <span className="text-slate-500">Account Status:</span>
+                    <span
+                      className={`font-semibold ${
+                        user.status === 'active' ? 'text-emerald-600' : 'text-rose-600'
+                      }`}
+                    >
+                      {user.status === 'active' ? 'Active' : 'Suspended'}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">যোগদানের তারিখ:</span>
+                    <span className="text-slate-500">Joined Date:</span>
                     <span className="font-medium text-slate-900">
                       {formatDate(user.joinedDate || '2024-05-15')}
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-500">ডেলিভারি রেট হিসেব:</span>
+                    <span className="text-slate-500">Delivery Success Ratio:</span>
                     <span className="font-medium text-slate-900">
-                      {toBnNum(user.deliveredCount)} / {toBnNum(user.orderCount)} সফল পার্সেল
+                      {user.deliveredCount} / {user.orderCount} parcels delivered
                     </span>
                   </div>
                 </div>
@@ -1234,10 +1249,10 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
 function UsersManagement() {
   const { users: authUsers = [] } = useAuth();
   const { orders = [], books = [] } = useData();
-  const { id: routeUserId } = useParams();
+  const { userName: routeUserName, id: routeUserId } = useParams();
   const navigate = useNavigate();
 
-  const [selectedUserId, setSelectedUserId] = useState(routeUserId || null);
+  const [selectedUserId, setSelectedUserId] = useState(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('orders');
@@ -1270,7 +1285,7 @@ function UsersManagement() {
 
       return {
         ...user,
-        phone: user.phone || '০১৭১২-৩৪৫৬৭৮',
+        phone: toEnDigits(user.phone || '01712-345678'),
         orderCount,
         totalSpent,
         deliveredCount,
@@ -1281,12 +1296,37 @@ function UsersManagement() {
     });
   }, [authUsers, orders]);
 
-  // Active view: selected user if ID matched
+  // Active view: match by route user name (with fallback to selectedUserId or legacy ID)
   const activeUser = useMemo(() => {
-    const targetId = routeUserId || selectedUserId;
-    if (!targetId) return null;
-    return processedUsers.find((u) => u.id === targetId) || null;
-  }, [routeUserId, selectedUserId, processedUsers]);
+    const rawParam = routeUserName ?? routeUserId;
+    if (!rawParam) {
+      return selectedUserId
+        ? processedUsers.find((u) => u.id === selectedUserId) || null
+        : null;
+    }
+
+    const decodedParam = decodeURIComponent(rawParam).trim();
+    const normalizedParam = decodedParam.toLowerCase();
+
+    if (selectedUserId) {
+      const selectedMatch = processedUsers.find(
+        (u) =>
+          u.id === selectedUserId &&
+          (u.name.trim().toLowerCase() === normalizedParam ||
+            u.name.trim().replace(/\s+/g, '-').toLowerCase() === normalizedParam)
+      );
+      if (selectedMatch) return selectedMatch;
+    }
+
+    return (
+      processedUsers.find(
+        (u) =>
+          u.name.trim().toLowerCase() === normalizedParam ||
+          u.name.trim().replace(/\s+/g, '-').toLowerCase() === normalizedParam ||
+          u.id === decodedParam
+      ) || null
+    );
+  }, [routeUserName, routeUserId, selectedUserId, processedUsers]);
 
   // Filtered & sorted list
   const visibleUsers = useMemo(() => {
@@ -1308,7 +1348,7 @@ function UsersManagement() {
         if (sortBy === 'spent') return b.totalSpent - a.totalSpent;
         if (sortBy === 'deliveryRate') return b.deliveryRate - a.deliveryRate;
         if (sortBy === 'wishlist') return b.wishlistCount - a.wishlistCount;
-        return a.name.localeCompare(b.name, 'bn');
+        return a.name.localeCompare(b.name);
       });
   }, [processedUsers, search, statusFilter, sortBy]);
 
@@ -1323,10 +1363,10 @@ function UsersManagement() {
         )
       : 100;
 
-  // Handle open user details
+  // Handle open user details using user's name in route
   const handleSelectUser = (user) => {
     setSelectedUserId(user.id);
-    navigate(`/dashboard/all-users/users/${user.id}`);
+    navigate(`/dashboard/all-users/users/${toUserRouteParam(user.name)}`);
   };
 
   // Handle back to list
@@ -1350,14 +1390,14 @@ function UsersManagement() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="ব্যবহারকারী ব্যবস্থাপনা"
-        description="নিবন্ধিত সকল গ্রাহকদের তালিকা, ফোন নাম্বার, ইমেইল, ডেলিভারি রেট, মোট অর্ডার ও উইশলিস্ট তথ্য।"
+        title="Users Management"
+        description="Directory of all registered customers, contact details, delivery rates, orders, and wishlist insights."
       />
 
       {/* Navigation Tab to Counter Sales */}
       <div className="flex flex-wrap items-center gap-2 border-b border-dark/10 pb-3">
         <span className="rounded-xl border border-primary bg-primary px-4 py-2 text-xs font-bold text-dark shadow-2xs flex items-center gap-1.5">
-          <FiUsers /> গ্রাহক তালিকা (Users)
+          <FiUsers /> Users List
         </span>
         <Link
           to="/dashboard/counter-orders"
@@ -1374,12 +1414,12 @@ function UsersManagement() {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
               <FiUsers className="text-xl" />
             </span>
-            <span className="text-xs font-semibold text-slate-500">সর্বমোট ইউজার</span>
+            <span className="text-xs font-semibold text-slate-500">Total Users</span>
           </div>
           <p className="mt-3 text-2xl font-bold text-slate-900">
-            {toBnNum(totalUsersCount)} জন
+            {totalUsersCount}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">নিবন্ধিত ক্রেতা ও ব্যবহারকারী</p>
+          <p className="mt-0.5 text-xs text-slate-500">Registered buyers & users</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
@@ -1387,12 +1427,12 @@ function UsersManagement() {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
               <FiPackage className="text-xl" />
             </span>
-            <span className="text-xs font-semibold text-slate-500">মোট অর্ডার</span>
+            <span className="text-xs font-semibold text-slate-500">Total Orders</span>
           </div>
           <p className="mt-3 text-2xl font-bold text-slate-900">
-            {toBnNum(totalOrdersCount)} টি
+            {totalOrdersCount}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">গ্রাহকদের দেওয়া মোট অর্ডার</p>
+          <p className="mt-0.5 text-xs text-slate-500">Total orders placed</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
@@ -1400,12 +1440,12 @@ function UsersManagement() {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
               <FiTrendingUp className="text-xl" />
             </span>
-            <span className="text-xs font-semibold text-slate-500">মোট বিক্রি</span>
+            <span className="text-xs font-semibold text-slate-500">Total Sales</span>
           </div>
           <p className="mt-3 text-2xl font-bold text-slate-900">
             {formatCurrency(totalSpentAll)}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">গ্রাহকদের অর্ডারের সমষ্টি</p>
+          <p className="mt-0.5 text-xs text-slate-500">Combined customer spending</p>
         </div>
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
@@ -1413,12 +1453,12 @@ function UsersManagement() {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
               <FiTruck className="text-xl" />
             </span>
-            <span className="text-xs font-semibold text-slate-500">গড় ডেলিভারি রেট</span>
+            <span className="text-xs font-semibold text-slate-500">Avg. Delivery Rate</span>
           </div>
           <p className="mt-3 text-2xl font-bold text-slate-900">
-            {toBnNum(avgDeliveryRate)}%
+            {avgDeliveryRate}%
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">সফলভাবে পার্সেল গ্রহণের হার</p>
+          <p className="mt-0.5 text-xs text-slate-500">Successful parcel acceptance</p>
         </div>
       </div>
 
@@ -1435,7 +1475,7 @@ function UsersManagement() {
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="নাম, ইমেইল বা ফোন নাম্বার খুঁজুন..."
+              placeholder="Search by name, email or phone..."
               className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2 pl-9 pr-3 text-xs sm:text-sm text-slate-800 outline-none transition focus:border-primary focus:bg-white"
             />
           </div>
@@ -1444,10 +1484,10 @@ function UsersManagement() {
             {/* Status & Role filters */}
             <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
               {[
-                ['all', 'সকল ইউজার'],
-                ['user', 'সাধারণ গ্রাহক'],
-                ['author', 'লেখক'],
-                ['active', 'সক্রিয়'],
+                ['all', 'All Users'],
+                ['user', 'Customers'],
+                ['author', 'Authors'],
+                ['active', 'Active'],
               ].map(([key, label]) => (
                 <button
                   key={key}
@@ -1470,11 +1510,11 @@ function UsersManagement() {
               onChange={(e) => setSortBy(e.target.value)}
               className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-primary cursor-pointer"
             >
-              <option value="orders">অর্ডার সংখ্যা (বেশি থেকে কম)</option>
-              <option value="spent">মোট খরচ (বেশি থেকে কম)</option>
-              <option value="deliveryRate">ডেলিভারি রেট (বেশি থেকে কম)</option>
-              <option value="wishlist">উইশলিস্ট বই (বেশি থেকে কম)</option>
-              <option value="name">নামানুসারে</option>
+              <option value="orders">Orders (High to Low)</option>
+              <option value="spent">Total Spent (High to Low)</option>
+              <option value="deliveryRate">Delivery Rate (High to Low)</option>
+              <option value="wishlist">Wishlist (High to Low)</option>
+              <option value="name">Name (A-Z)</option>
             </select>
           </div>
         </div>
@@ -1484,14 +1524,14 @@ function UsersManagement() {
           <table className="w-full min-w-[850px] text-left text-sm">
             <thead>
               <tr className="border-b border-slate-100 bg-slate-50/70 text-xs font-semibold text-slate-500">
-                <th className="px-5 py-3.5">ব্যবহারকারী (নাম ও রোল)</th>
-                <th className="px-5 py-3.5">যোগাযোগের তথ্য</th>
-                <th className="px-5 py-3.5 text-center">ডেলিভারি রেট</th>
-                <th className="px-5 py-3.5 text-center">অর্ডার সংখ্যা</th>
-                <th className="px-5 py-3.5 text-right">মোট ক্রয়মূল্য</th>
-                <th className="px-5 py-3.5 text-center">উইশলিস্ট</th>
-                <th className="px-5 py-3.5 text-center">স্ট্যাটাস</th>
-                <th className="px-5 py-3.5 text-right">পদক্ষেপ</th>
+                <th className="px-5 py-3.5">User (Name & Role)</th>
+                <th className="px-5 py-3.5">Contact Info</th>
+                <th className="px-5 py-3.5 text-center">Delivery Rate</th>
+                <th className="px-5 py-3.5 text-center">Orders</th>
+                <th className="px-5 py-3.5 text-right">Total Spent</th>
+                <th className="px-5 py-3.5 text-center">Wishlist</th>
+                <th className="px-5 py-3.5 text-center">Status</th>
+                <th className="px-5 py-3.5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1527,11 +1567,7 @@ function UsersManagement() {
                           {user.name}
                         </p>
                         <span className="inline-block rounded bg-slate-100 px-1.5 py-0.2 text-[10px] font-medium text-slate-600">
-                          {user.role === 'admin'
-                            ? 'অ্যাডমিন'
-                            : user.role === 'author'
-                            ? 'লেখক'
-                            : 'গ্রাহক'}
+                          {getRoleLabel(user.role)}
                         </span>
                       </div>
                     </div>
@@ -1559,7 +1595,7 @@ function UsersManagement() {
                             : 'bg-rose-50 text-rose-700 ring-1 ring-rose-200/60'
                         }`}
                       >
-                        {toBnNum(user.deliveryRate)}%
+                        {user.deliveryRate}%
                       </span>
                       <div className="mt-1 h-1 w-14 overflow-hidden rounded-full bg-slate-100">
                         <div
@@ -1580,7 +1616,7 @@ function UsersManagement() {
                   <td className="whitespace-nowrap px-5 py-3.5 text-center">
                     <span className="inline-flex items-center gap-1 rounded-lg bg-blue-50/70 px-2.5 py-1 text-xs font-bold text-blue-700">
                       <FiShoppingBag className="text-[11px]" />
-                      <span>{toBnNum(user.orderCount)} বার</span>
+                      <span>{user.orderCount} {user.orderCount === 1 ? 'order' : 'orders'}</span>
                     </span>
                   </td>
 
@@ -1595,7 +1631,7 @@ function UsersManagement() {
                   <td className="whitespace-nowrap px-5 py-3.5 text-center">
                     <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600">
                       <FiHeart className="text-rose-500 fill-rose-500/20" />
-                      <span>{toBnNum(user.wishlistCount)} টি</span>
+                      <span>{user.wishlistCount}</span>
                     </span>
                   </td>
 
@@ -1613,7 +1649,7 @@ function UsersManagement() {
                           user.status === 'active' ? 'bg-emerald-500' : 'bg-rose-500'
                         }`}
                       />
-                      {user.status === 'active' ? 'সক্রিয়' : 'স্থগিত'}
+                      {user.status === 'active' ? 'Active' : 'Suspended'}
                     </span>
                   </td>
 
@@ -1628,7 +1664,7 @@ function UsersManagement() {
                       className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-primary hover:text-dark"
                     >
                       <FiEye className="text-xs" />
-                      <span>বিস্তারিত</span>
+                      <span>Details</span>
                     </button>
                   </td>
                 </tr>
@@ -1639,8 +1675,8 @@ function UsersManagement() {
           {visibleUsers.length === 0 && (
             <div className="py-14 text-center">
               <FiUsers className="mx-auto text-4xl text-slate-300" />
-              <p className="mt-2 text-sm font-semibold text-slate-700">কোনো ইউজার পাওয়া যায়নি</p>
-              <p className="text-xs text-slate-400">অন্য কোনো নাম বা নাম্বার দিয়ে সার্চ করুন।</p>
+              <p className="mt-2 text-sm font-semibold text-slate-700">No users found</p>
+              <p className="text-xs text-slate-400">Try searching with another name or phone number.</p>
             </div>
           )}
         </div>
@@ -1648,10 +1684,10 @@ function UsersManagement() {
         {/* Footer */}
         <div className="flex items-center justify-between border-t border-slate-100 p-4 text-xs font-medium text-slate-500 sm:px-5">
           <span>
-            সর্বমোট {toBnNum(totalUsersCount)} জনের মধ্যে {toBnNum(visibleUsers.length)} জন প্রদর্শিত হচ্ছে
+            Showing {visibleUsers.length} of {totalUsersCount} users
           </span>
           <span className="text-[11px] text-slate-400">
-            যে কোনো ইউজারের উপর ক্লিক করে তার সম্পূর্ণ প্রোফাইল ও অর্ডার বিবরণ দেখুন
+            Click any user row to view their full profile and order details
           </span>
         </div>
       </section>

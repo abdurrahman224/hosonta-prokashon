@@ -45,7 +45,7 @@ export const adminRoutes = (
       }
     />
     <Route
-      path="/dashboard/all-users/users/:id"
+      path="/dashboard/all-users/users/:userName"
       element={
         <ProtectedRoute allowedRoles={['admin']}>
           <UsersManagement scope="users" />
@@ -61,7 +61,7 @@ export const adminRoutes = (
       }
     />
     <Route
-      path="/dashboard/all-users/shops/:id"
+      path="/dashboard/all-users/shops/:shopName"
       element={
         <ProtectedRoute allowedRoles={['admin']}>
           <ShopManagement />
@@ -168,7 +168,7 @@ export const adminRoutes = (
       path="/dashboard/settings"
       element={
         <ProtectedRoute allowedRoles={['admin']}>
-          <DashboardSection title="সেটিংস" />
+          <DashboardSection title="Settings" />
         </ProtectedRoute>
       }
     />

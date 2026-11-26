@@ -35,10 +35,10 @@ import AddShopModal from '../../../components/dashboard/AddShopModal';
 /* ------------------------------------------------------------------ */
 
 const COMPANY = {
-  name: 'হসন্ত প্রকাশন',
+  name: 'Hosonta Prokashon',
   legalName: 'Hosonta Prokashon',
-  address: '৩৮/২ মান্নান বাজার (২য় তলা), বাংলাবাজার, ঢাকা-১১০০',
-  hotline: '০১৬২৮-০৩৭৫৯১',
+  address: '38/2 Mannan Market (2nd Floor), Banglabazar, Dhaka-1100',
+  hotline: '01628-037591',
   email: 'support@hosontoprokashon.com',
   website: 'www.hosontoprokashon.com',
 };
@@ -46,9 +46,18 @@ const COMPANY = {
 const FALLBACK_COVER =
   'https://images.unsplash.com/photo-1544947950-fa07a98d237f?auto=format&fit=crop&w=400&q=80';
 
-const toBnNum = value => {
+const toEnDigits = value => {
   const bnDigits = '০১২৩৪৫৬৭৮৯';
-  return String(value ?? '').replace(/\d/g, d => bnDigits[Number(d)]);
+  return String(value ?? '').replace(/[০-৯]/g, d =>
+    String(bnDigits.indexOf(d)),
+  );
+};
+
+const formatCurrency = value => {
+  const num = Number(value || 0);
+  return `৳${num.toLocaleString('en-US', {
+    maximumFractionDigits: 2,
+  })}`;
 };
 
 const formatDate = isoString => {
@@ -56,8 +65,8 @@ const formatDate = isoString => {
   try {
     const d = new Date(isoString);
     if (Number.isNaN(d.getTime())) return isoString;
-    return d.toLocaleDateString('bn-BD', {
-      day: 'numeric',
+    return d.toLocaleDateString('en-GB', {
+      day: '2-digit',
       month: 'short',
       year: 'numeric',
     });
@@ -67,12 +76,15 @@ const formatDate = isoString => {
 };
 
 const paymentLabel = (m, long = false) => {
-  if (m === 'cash') return long ? 'নগদ ক্যাশ (Cash)' : 'ক্যাশ';
-  if (m === 'bkash') return long ? 'বিকাশ (bKash)' : 'বিকাশ';
-  if (m === 'bank') return long ? 'ব্যাংক ট্রান্সফার' : 'ব্যাংক';
-  if (m === 'nagad') return long ? 'নগদ ডিজিটাল' : 'নগদ (ডিজিটাল)';
-  return m || 'ক্যাশ';
+  if (m === 'cash') return 'Cash';
+  if (m === 'bkash') return 'bKash';
+  if (m === 'bank') return long ? 'Bank Transfer' : 'Bank';
+  if (m === 'nagad') return long ? 'Nagad Digital' : 'Nagad';
+  return m || 'Cash';
 };
+
+const toShopRouteParam = (name = '') =>
+  encodeURIComponent(String(name).trim().replace(/\s+/g, '-'));
 
 // Resolves book details (cover, title, author, price) from the books dataset
 function resolveOrderItem(item, allBooks = []) {
@@ -88,9 +100,9 @@ function resolveOrderItem(item, allBooks = []) {
       matchedBook?.cover ||
       matchedBook?.image ||
       FALLBACK_COVER,
-    title: item.title || matchedBook?.title || 'বইয়ের নাম',
-    author: item.author || matchedBook?.author || 'লেখক',
-    category: item.category || matchedBook?.category || 'সাহিত্য',
+    title: item.title || matchedBook?.title || 'Book Title',
+    author: item.author || matchedBook?.author || 'Author',
+    category: item.category || matchedBook?.category || 'Literature',
     price: Number(item.price ?? matchedBook?.price ?? 0),
     quantity: Number(item.quantity ?? item.qty ?? 1),
   };
@@ -196,7 +208,7 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <h3 className="font-heading text-base font-bold text-dark sm:text-lg">
-                    কাউন্টার চালান: {order.id}
+                    Counter Invoice: {order.id}
                   </h3>
                   <span
                     className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
@@ -206,13 +218,13 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
                     }`}
                   >
                     {dueAmount > 0
-                      ? `বকেয়া: ৳${toBnNum(dueAmount)}`
-                      : 'সম্পূর্ণ পরিশোধিত'}
+                      ? `Due: ${formatCurrency(dueAmount)}`
+                      : 'Fully Paid'}
                   </span>
                 </div>
                 <p className="truncate text-xs text-dark/60">
-                  দোকান: {order.shopName || shop?.shopName || 'কাউন্টার সেল'} •
-                  তারিখ: {formatDate(order.date)}
+                  Shop: {order.shopName || shop?.shopName || 'Counter Sale'} •
+                  Date: {formatDate(order.date)}
                 </p>
               </div>
             </div>
@@ -230,10 +242,10 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
           {/* Row 2: tabs + print (+ close on large screens) */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex w-full rounded-lg bg-dark/5 p-1 sm:w-auto">
-              {tabBtn('details', 'চালান বিবরণ')}
+              {tabBtn('details', 'Invoice Details')}
               {tabBtn(
                 'invoice',
-                'ক্যাশ মেমো',
+                'Cash Memo',
                 <FiPrinter className="text-xs" />,
               )}
             </div>
@@ -243,7 +255,7 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
               onClick={handlePrint}
               className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-xs font-bold text-dark shadow-2xs transition hover:bg-primary-hover sm:flex-none"
             >
-              <FiPrinter className="text-sm" /> প্রিন্ট চালান
+              <FiPrinter className="text-sm" /> Print Invoice
             </button>
 
             <button
@@ -265,50 +277,49 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
                 <div className="min-w-0 rounded-xl border border-dark/10 bg-cream/50 p-3.5">
                   <span className="text-xs font-semibold text-dark/60">
-                    দোকানের নাম
+                    Shop Name
                   </span>
                   <p className="mt-1 break-words font-heading text-base font-bold text-dark">
                     {order.shopName || shop?.shopName || '—'}
                   </p>
                   <p className="text-xs text-dark/60">
-                    {order.representative || shop?.representative || 'মালিক'}
+                    {order.representative || shop?.representative || 'Owner'}
                   </p>
                 </div>
 
                 <div className="min-w-0 rounded-xl border border-dark/10 bg-cream/50 p-3.5">
                   <span className="text-xs font-semibold text-dark/60">
-                    যোগাযোগ নম্বর
+                    Contact Number
                   </span>
                   <p className="mt-1 break-words font-mono text-sm font-bold text-dark">
-                    {order.phone || shop?.phone || '—'}
+                    {toEnDigits(order.phone || shop?.phone || '—')}
                   </p>
                   <p className="break-words text-xs text-dark/60">
-                    {order.address || shop?.address || 'বাংলাবাজার'}
+                    {order.address || shop?.address || 'Banglabazar'}
                   </p>
                 </div>
 
                 <div className="min-w-0 rounded-xl border border-dark/10 bg-cream/50 p-3.5">
                   <span className="text-xs font-semibold text-dark/60">
-                    পেমেন্ট মেথড
+                    Payment Method
                   </span>
                   <p className="mt-1 font-heading text-sm font-bold capitalize text-dark">
                     {paymentLabel(order.paymentMethod, true)}
                   </p>
                   <p className="text-xs text-dark/60">
-                    সার্ভড বাই: {order.servedBy || 'কাউন্টার সেলস'}
+                    Served by: {order.servedBy || 'Counter Sales'}
                   </p>
                 </div>
 
                 <div className="min-w-0 rounded-xl border border-dark/10 bg-cream/50 p-3.5">
                   <span className="text-xs font-semibold text-dark/60">
-                    মোট চালান মূল্য
+                    Total Invoice Value
                   </span>
                   <p className="mt-1 font-heading text-base font-bold text-emerald-700">
-                    ৳{toBnNum(grandTotal)}
+                    {formatCurrency(grandTotal)}
                   </p>
                   <p className="text-xs font-semibold text-dark/60">
-                    কমিশন: {toBnNum(commission)}% (৳
-                    {toBnNum(commissionDeduction)})
+                    Commission: {commission}% ({formatCurrency(commissionDeduction)})
                   </p>
                 </div>
               </div>
@@ -318,14 +329,13 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-dark/10 bg-dark/2 px-3 py-3 sm:px-4">
                   <h4 className="flex items-center gap-2 font-heading text-sm font-bold text-dark">
                     <FiBookOpen className="text-base text-primary" />
-                    অর্ডারের বইসমূহ ({toBnNum(resolvedItems.length)}টি পদবী)
+                    Ordered Books ({resolvedItems.length}{' '}
+                    {resolvedItems.length === 1 ? 'Title' : 'Titles'})
                   </h4>
                   <span className="text-xs font-medium text-dark/60">
-                    মোট কপি:{' '}
+                    Total Copies:{' '}
                     <strong className="text-dark">
-                      {toBnNum(
-                        resolvedItems.reduce((s, i) => s + i.quantity, 0),
-                      )}
+                      {resolvedItems.reduce((s, i) => s + i.quantity, 0)}
                     </strong>
                   </span>
                 </div>
@@ -352,12 +362,12 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
                               {item.title}
                             </h5>
                             <p className="text-xs text-dark/60">
-                              লেখক: {item.author} • ক্যাটাগরি: {item.category}
+                              Author: {item.author} • Category: {item.category}
                             </p>
                             <span className="text-xs text-dark/70">
-                              গায়ের দাম: ৳{toBnNum(item.price)} ×{' '}
+                              Cover Price: {formatCurrency(item.price)} ×{' '}
                               <strong className="text-dark">
-                                {toBnNum(item.quantity)} কপি
+                                {item.quantity} {item.quantity === 1 ? 'copy' : 'copies'}
                               </strong>
                             </span>
                           </div>
@@ -365,7 +375,7 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
 
                         <div className="shrink-0 text-right">
                           <span className="font-heading text-sm font-bold text-dark">
-                            ৳{toBnNum(itemTotal)}
+                            {formatCurrency(itemTotal)}
                           </span>
                         </div>
                       </div>
@@ -377,36 +387,36 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
                 <div className="border-t border-dark/10 bg-cream/40 p-3 sm:p-4">
                   <div className="space-y-1.5 text-xs sm:ml-auto sm:max-w-xs">
                     <div className="flex justify-between gap-3 text-dark/70">
-                      <span>বইয়ের মোট মূল্য (Subtotal):</span>
-                      <span className="font-mono">৳{toBnNum(subtotal)}</span>
+                      <span>Subtotal:</span>
+                      <span className="font-mono">{formatCurrency(subtotal)}</span>
                     </div>
                     <div className="flex justify-between gap-3 text-emerald-700">
-                      <span>পাইকারি কমিশন ({toBnNum(commission)}%):</span>
+                      <span>Wholesale Commission ({commission}%):</span>
                       <span className="font-mono">
-                        -৳{toBnNum(commissionDeduction)}
+                        -{formatCurrency(commissionDeduction)}
                       </span>
                     </div>
                     <div className="flex justify-between gap-3 border-t border-dark/10 pt-1.5 font-heading text-sm font-bold text-dark">
-                      <span>মোট চালান বিল (Grand Total):</span>
+                      <span>Grand Total:</span>
                       <span className="text-emerald-700">
-                        ৳{toBnNum(grandTotal)}
+                        {formatCurrency(grandTotal)}
                       </span>
                     </div>
                     <div className="flex justify-between gap-3 text-dark/70">
-                      <span>পরিশোধিত (Paid):</span>
+                      <span>Paid:</span>
                       <span className="font-mono font-bold text-dark">
-                        ৳{toBnNum(paidAmount)}
+                        {formatCurrency(paidAmount)}
                       </span>
                     </div>
                     {dueAmount > 0 ? (
                       <div className="flex justify-between gap-3 border-t border-amber-200 pt-1 font-bold text-amber-800">
-                        <span>বকেয়া (Due Amount):</span>
-                        <span className="font-mono">৳{toBnNum(dueAmount)}</span>
+                        <span>Due Amount:</span>
+                        <span className="font-mono">{formatCurrency(dueAmount)}</span>
                       </div>
                     ) : (
                       <div className="flex justify-between gap-3 font-bold text-emerald-700">
-                        <span>বকেয়া (Due):</span>
-                        <span>পরিশোধিত</span>
+                        <span>Due:</span>
+                        <span>Paid</span>
                       </div>
                     )}
                   </div>
@@ -415,7 +425,7 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
 
               {order.notes && (
                 <div className="rounded-xl border border-dark/10 bg-amber-50/50 p-3.5 text-xs text-dark/80">
-                  <span className="font-bold text-dark">চালান নোট:</span>{' '}
+                  <span className="font-bold text-dark">Invoice Note:</span>{' '}
                   {order.notes}
                 </div>
               )}
@@ -437,13 +447,13 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
                 {COMPANY.address}
                 <span className="hidden sm:inline"> • </span>
                 <br className="sm:hidden" />
-                হটলাইন: {COMPANY.hotline}
+                Hotline: {COMPANY.hotline}
                 <span className="hidden sm:inline"> • </span>
                 <br className="sm:hidden" />
-                ইমেইল: {COMPANY.email}
+                Email: {COMPANY.email}
               </p>
               <div className="mt-2 inline-block rounded-md bg-dark px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white sm:text-xs">
-                পাইকারি ক্যাশ মেমো / কাউন্টার চালান
+                WHOLESALE CASH MEMO / COUNTER INVOICE
               </div>
             </div>
 
@@ -451,36 +461,36 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
             <div className="mt-4 grid grid-cols-1 gap-4 text-xs sm:grid-cols-2 print:grid-cols-2">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-dark/60">
-                  দোকান ও গ্রাহক তথ্য:
+                  Shop & Customer Info:
                 </p>
                 <h4 className="font-heading text-sm font-bold text-dark">
-                  {order.shopName || shop?.shopName || 'কাউন্টার বিক্রয়'}
+                  {order.shopName || shop?.shopName || 'Counter Sale'}
                 </h4>
                 <p className="text-dark/80">
-                  স্বত্বাধিকারী / প্রতিনিধি:{' '}
-                  {order.representative || shop?.representative || 'মালিক'}
+                  Owner / Representative:{' '}
+                  {order.representative || shop?.representative || 'Owner'}
                 </p>
                 <p className="break-words text-dark/80">
-                  ঠিকানা: {order.address || shop?.address || 'বাংলাবাজার, ঢাকা'}
+                  Address: {order.address || shop?.address || 'Banglabazar, Dhaka'}
                 </p>
                 <p className="text-dark/80">
-                  মোবাইল: {order.phone || shop?.phone || COMPANY.hotline}
+                  Phone: {toEnDigits(order.phone || shop?.phone || COMPANY.hotline)}
                 </p>
               </div>
 
               <div className="min-w-0 sm:text-right print:text-right">
                 <p className="text-[11px] font-semibold uppercase tracking-wider text-dark/60">
-                  চালান বিবরণ:
+                  Invoice Details:
                 </p>
                 <p className="font-bold text-dark">
-                  চালান নং: <span className="font-mono">{order.id}</span>
+                  Invoice No: <span className="font-mono">{order.id}</span>
                 </p>
-                <p className="text-dark/80">তারিখ: {formatDate(order.date)}</p>
+                <p className="text-dark/80">Date: {formatDate(order.date)}</p>
                 <p className="text-dark/80">
-                  পেমেন্ট মাধ্যম: {paymentLabel(order.paymentMethod)}
+                  Payment Method: {paymentLabel(order.paymentMethod)}
                 </p>
                 <p className="text-dark/80">
-                  বিক্রয়কর্মী: {order.servedBy || 'কাউন্টার সেলস ডেস্ক'}
+                  Salesperson: {order.servedBy || 'Counter Sales Desk'}
                 </p>
               </div>
             </div>
@@ -490,18 +500,18 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
               <table className="w-full min-w-[460px] text-left text-xs print:min-w-0">
                 <thead className="border-b border-dark/20 bg-dark/5 font-bold text-dark">
                   <tr>
-                    <th className="w-10 px-3 py-2.5 text-center">নং</th>
-                    <th className="px-3 py-2.5">বইয়ের নাম ও লেখক</th>
-                    <th className="px-3 py-2.5 text-center">পরিমাণ</th>
-                    <th className="px-3 py-2.5 text-right">গায়ের দাম</th>
-                    <th className="px-3 py-2.5 text-right">মোট মূল্য</th>
+                    <th className="w-10 px-3 py-2.5 text-center">#</th>
+                    <th className="px-3 py-2.5">Book Title & Author</th>
+                    <th className="px-3 py-2.5 text-center">Qty</th>
+                    <th className="px-3 py-2.5 text-right">Cover Price</th>
+                    <th className="px-3 py-2.5 text-right">Total</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-dark/10">
                   {resolvedItems.map((item, index) => (
                     <tr key={index}>
                       <td className="px-3 py-2 text-center text-dark/60">
-                        {toBnNum(index + 1)}
+                        {index + 1}
                       </td>
                       <td className="px-3 py-2">
                         <span className="font-semibold text-dark">
@@ -512,13 +522,13 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
                         </span>
                       </td>
                       <td className="px-3 py-2 text-center font-bold">
-                        {toBnNum(item.quantity)}
+                        {item.quantity}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 text-right font-mono">
-                        ৳{toBnNum(item.price)}
+                        {formatCurrency(item.price)}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2 text-right font-mono font-bold">
-                        ৳{toBnNum(item.price * item.quantity)}
+                        {formatCurrency(item.price * item.quantity)}
                       </td>
                     </tr>
                   ))}
@@ -529,44 +539,43 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
             {/* Calculations Summary */}
             <div className="mt-4 flex flex-col gap-4 text-xs sm:flex-row sm:justify-between sm:gap-6 print:flex-row print:justify-between">
               <div className="space-y-1 text-dark/70 sm:max-w-xs">
-                <p className="font-semibold text-dark">শর্তাবলী:</p>
+                <p className="font-semibold text-dark">Terms & Conditions:</p>
                 <p>
-                  • বিক্রয়কৃত বই অক্ষত অবস্থায় ৩ দিনের মধ্যে পরিবর্তনযোগ্য।
+                  • Sold books are exchangeable within 3 days in undamaged condition.
                 </p>
                 <p>
-                  • কম্পিউটার জেনারেটেড চালান, কোনো সিল বা স্বাক্ষরের প্রয়োজন
-                  নেই।
+                  • Computer-generated invoice, no seal or signature required.
                 </p>
               </div>
 
               <div className="w-full space-y-1.5 border-t border-dark/10 pt-2 sm:w-64 print:w-64">
                 <div className="flex justify-between gap-3 text-dark/70">
-                  <span>সর্বমোট গায়ের দাম:</span>
-                  <span className="font-mono">৳{toBnNum(subtotal)}</span>
+                  <span>Total Cover Price:</span>
+                  <span className="font-mono">{formatCurrency(subtotal)}</span>
                 </div>
                 <div className="flex justify-between gap-3 text-emerald-700">
-                  <span>পাইকারি কমিশন ({toBnNum(commission)}%):</span>
+                  <span>Wholesale Commission ({commission}%):</span>
                   <span className="font-mono">
-                    -৳{toBnNum(commissionDeduction)}
+                    -{formatCurrency(commissionDeduction)}
                   </span>
                 </div>
                 <div className="flex justify-between gap-3 border-t border-dark/20 pt-1 font-heading text-sm font-bold text-dark">
-                  <span>সর্বমোট প্রদেয়:</span>
-                  <span>৳{toBnNum(grandTotal)}</span>
+                  <span>Net Payable:</span>
+                  <span>{formatCurrency(grandTotal)}</span>
                 </div>
                 <div className="flex justify-between gap-3 font-medium text-dark/80">
-                  <span>জমা / পরিশোধিত:</span>
-                  <span className="font-mono">৳{toBnNum(paidAmount)}</span>
+                  <span>Paid:</span>
+                  <span className="font-mono">{formatCurrency(paidAmount)}</span>
                 </div>
                 {dueAmount > 0 ? (
                   <div className="flex justify-between gap-3 font-bold text-amber-800">
-                    <span>বকেয়া (Due):</span>
-                    <span className="font-mono">৳{toBnNum(dueAmount)}</span>
+                    <span>Due:</span>
+                    <span className="font-mono">{formatCurrency(dueAmount)}</span>
                   </div>
                 ) : (
                   <div className="flex justify-between gap-3 font-bold text-emerald-700">
-                    <span>বকেয়া:</span>
-                    <span>সম্পূর্ণ পরিশোধিত</span>
+                    <span>Due:</span>
+                    <span>Fully Paid</span>
                   </div>
                 )}
               </div>
@@ -575,10 +584,10 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
             {/* Signatures */}
             <div className="mt-10 flex flex-wrap justify-between gap-6 text-center text-xs text-dark/70 sm:mt-12">
               <div className="w-full border-t border-dark/30 pt-1 sm:w-44 print:w-44">
-                গ্রাহক / দোকান প্রতিনিধির স্বাক্ষর
+                Customer / Shop Representative
               </div>
               <div className="w-full border-t border-dark/30 pt-1 font-semibold text-dark sm:w-44 print:w-44">
-                হসন্ত প্রকাশন কর্তৃত্বপক্ষ
+                Hosonta Prokashon Authority
               </div>
             </div>
           </div>
@@ -605,12 +614,12 @@ function RecordPaymentModal({ isOpen, shop, onClose, onPaymentRecorded }) {
     e.preventDefault();
     const payNum = Number(amount);
     if (!payNum || payNum <= 0) {
-      toast.error('সঠিক টাকার অঙ্ক লিখুন');
+      toast.error('Please enter a valid payment amount');
       return;
     }
 
     onPaymentRecorded(shop.id, payNum, method, note);
-    toast.success(`৳${toBnNum(payNum)} জমা এন্ট্রি সফল হয়েছে!`);
+    toast.success(`${formatCurrency(payNum)} payment recorded successfully!`);
     onClose();
   };
 
@@ -623,7 +632,7 @@ function RecordPaymentModal({ isOpen, shop, onClose, onPaymentRecorded }) {
           </div>
           <div className="min-w-0">
             <h3 className="font-heading text-base font-bold text-dark">
-              বকেয়া পরিশোধ / পেমেন্ট গ্রহণ
+              Collect Due Payment
             </h3>
             <p className="truncate text-xs text-dark/60">{shop.shopName}</p>
           </div>
@@ -642,23 +651,23 @@ function RecordPaymentModal({ isOpen, shop, onClose, onPaymentRecorded }) {
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
             <span className="text-xs font-semibold text-amber-900">
-              বর্তমান বকেয়া (Total Due):
+              Total Due Balance:
             </span>
             <span className="font-heading text-base font-bold text-amber-900">
-              ৳{toBnNum(currentDue)}
+              {formatCurrency(currentDue)}
             </span>
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-bold text-dark">
-              পরিশোধিত টাকার পরিমাণ (৳) <span className="text-red-500">*</span>
+              Payment Amount (৳) <span className="text-red-500">*</span>
             </label>
             <input
               type="number"
               required
               min="1"
               max={currentDue > 0 ? currentDue * 2 : 100000}
-              placeholder={`উদাঃ ${currentDue}`}
+              placeholder={`e.g. ${currentDue}`}
               value={amount}
               onChange={e => setAmount(e.target.value)}
               className={inputCls}
@@ -667,27 +676,27 @@ function RecordPaymentModal({ isOpen, shop, onClose, onPaymentRecorded }) {
 
           <div>
             <label className="mb-1 block text-xs font-bold text-dark">
-              পেমেন্ট মাধ্যম
+              Payment Method
             </label>
             <select
               value={method}
               onChange={e => setMethod(e.target.value)}
               className={inputCls}
             >
-              <option value="cash">নগদ ক্যাশ (Cash)</option>
-              <option value="bkash">বিকাশ (bKash)</option>
-              <option value="bank">ব্যাংক ডিপোজিট</option>
-              <option value="nagad">নগদ (Nagad)</option>
+              <option value="cash">Cash</option>
+              <option value="bkash">bKash</option>
+              <option value="bank">Bank Deposit</option>
+              <option value="nagad">Nagad</option>
             </select>
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-bold text-dark">
-              মন্তব্য / রসিদ নং
+              Note / Receipt No.
             </label>
             <input
               type="text"
-              placeholder="ব্যাংক স্লিপ বা ট্রানজেকশন আইডি..."
+              placeholder="Bank slip or transaction ID..."
               value={note}
               onChange={e => setNote(e.target.value)}
               className={inputCls}
@@ -701,13 +710,13 @@ function RecordPaymentModal({ isOpen, shop, onClose, onPaymentRecorded }) {
             onClick={onClose}
             className="rounded-lg px-4 py-2.5 text-xs font-semibold text-dark/70 hover:bg-dark/5"
           >
-            বাতিল
+            Cancel
           </button>
           <button
             type="submit"
             className="rounded-lg bg-primary px-5 py-2.5 text-xs font-bold text-dark shadow-2xs hover:bg-primary-hover"
           >
-            জমা নিশ্চিত করুন
+            Confirm Payment
           </button>
         </div>
       </form>
@@ -752,7 +761,8 @@ function ShopDetailsView({
         if (
           order.phone &&
           shop.phone &&
-          order.phone.replace(/\D/g, '') === shop.phone.replace(/\D/g, '')
+          toEnDigits(order.phone).replace(/\D/g, '') ===
+            toEnDigits(shop.phone).replace(/\D/g, '')
         )
           return true;
         return false;
@@ -821,9 +831,10 @@ function ShopDetailsView({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-dark/10 bg-white px-4 py-2 text-sm font-semibold text-dark shadow-2xs transition hover:border-dark/20 hover:bg-cream sm:justify-start"
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-dark/15 bg-white px-4 py-2 text-xs font-semibold text-dark shadow-2xs transition hover:border-dark/20 hover:bg-cream sm:justify-start"
         >
-          <FiArrowLeft className="text-base" /> সকল দোকানে ফিরে যান
+          <FiArrowLeft className="text-base" />
+          <span>Back to Shops</span>
         </button>
 
         <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:flex sm:items-center">
@@ -831,7 +842,7 @@ function ShopDetailsView({
             to="/dashboard/counter-orders"
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-dark shadow-2xs transition hover:bg-primary-hover"
           >
-            <FiPlus className="text-sm" /> নতুন কাউন্টার চালান
+            <FiPlus className="text-sm" /> New Counter Invoice
           </Link>
           {shopDue > 0 && (
             <button
@@ -839,7 +850,7 @@ function ShopDetailsView({
               onClick={() => onOpenPaymentModal(shop)}
               className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-white shadow-2xs transition hover:bg-amber-600"
             >
-              <FiDollarSign className="text-sm" /> বকেয়া জমা নিন
+              <FiDollarSign className="text-sm" /> Collect Due
             </button>
           )}
         </div>
@@ -858,11 +869,11 @@ function ShopDetailsView({
                   {shop.shopName}
                 </h2>
                 <span className="inline-flex items-center rounded-md bg-dark/5 px-2.5 py-0.5 text-xs font-semibold text-dark/70">
-                  {shop.category || 'বুকশপ'}
+                  {shop.category || 'Bookshop'}
                 </span>
                 {shop.tradeLicense && (
                   <span className="font-mono text-xs text-dark/50">
-                    লাইসেন্স: {shop.tradeLicense}
+                    License: {shop.tradeLicense}
                   </span>
                 )}
               </div>
@@ -870,23 +881,23 @@ function ShopDetailsView({
               <div className="mt-2 flex flex-col gap-y-2 text-xs text-dark/70 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-5">
                 <span className="flex items-center gap-1.5">
                   <FiUserCheck className="shrink-0 text-sm text-primary" />
-                  <strong>স্বত্বাধিকারী/প্রতিনিধি:</strong>{' '}
+                  <strong>Owner/Representative:</strong>{' '}
                   {shop.representative || shop.ownerName || '—'}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <FiPhone className="shrink-0 text-sm text-primary" />
                   <a
-                    href={`tel:${shop.phone}`}
+                    href={`tel:${toEnDigits(shop.phone)}`}
                     className="font-mono hover:underline"
                   >
-                    {shop.phone}
+                    {toEnDigits(shop.phone)}
                   </a>
                   <a
-                    href={`https://wa.me/88${shop.phone.replace(/\D/g, '')}`}
+                    href={`https://wa.me/88${toEnDigits(shop.phone).replace(/\D/g, '')}`}
                     target="_blank"
                     rel="noreferrer"
                     className="ml-1 text-emerald-600 hover:text-emerald-700"
-                    title="হোয়াটসঅ্যাপে মেসেজ পাঠান"
+                    title="Send WhatsApp message"
                   >
                     <FaWhatsapp size={14} />
                   </a>
@@ -913,17 +924,17 @@ function ShopDetailsView({
           {/* Quick Balance Alert in Header */}
           <div className="w-full rounded-xl border border-dark/10 bg-cream/60 p-4 lg:w-auto lg:min-w-[200px] lg:text-right">
             <span className="block text-xs font-semibold text-dark/60">
-              বর্তমান বকেয়া (Due Balance)
+              Due Balance
             </span>
             <span
               className={`mt-0.5 block font-heading text-xl font-bold ${
                 shopDue > 0 ? 'text-amber-700' : 'text-emerald-700'
               }`}
             >
-              ৳{toBnNum(shop.dueAmount || 0)}
+              {formatCurrency(shop.dueAmount || 0)}
             </span>
             <span className="text-[11px] text-dark/50">
-              {shopDue > 0 ? 'অনতিবিলম্বে পরিশোধযোগ্য' : 'সব চালান ক্লিয়ার'}
+              {shopDue > 0 ? 'Payable immediately' : 'All invoices cleared'}
             </span>
           </div>
         </div>
@@ -932,34 +943,34 @@ function ShopDetailsView({
         <div className="mt-5 grid grid-cols-2 gap-2.5 border-t border-dark/10 pt-5 sm:mt-6 sm:grid-cols-4 sm:gap-4 sm:pt-6">
           <div className="min-w-0 rounded-xl border border-dark/10 bg-cream/40 p-3 sm:p-4">
             <span className="text-xs font-semibold text-dark/60">
-              মোট চালান / অর্ডার
+              Total Invoices / Orders
             </span>
             <p className="mt-1 font-heading text-lg font-bold text-dark sm:text-xl">
-              {toBnNum(shop.orderCount || shopOrders.length)} টি
+              {shop.orderCount || shopOrders.length}
             </p>
-            <p className="text-[11px] text-dark/50">কাউন্টার থেকে ক্রয়</p>
+            <p className="text-[11px] text-dark/50">Counter purchases</p>
           </div>
 
           <div className="min-w-0 rounded-xl border border-dark/10 bg-cream/40 p-3 sm:p-4">
             <span className="text-xs font-semibold text-dark/60">
-              মোট অর্ডার ভ্যালু (বিক্রি)
+              Total Order Value (Sales)
             </span>
             <p className="mt-1 break-words font-heading text-lg font-bold text-emerald-700 sm:text-xl">
-              ৳{toBnNum(shop.totalOrderValue || 0)}
+              {formatCurrency(shop.totalOrderValue || 0)}
             </p>
             <p className="text-[11px] text-dark/50">
-              সর্বমোট কমিশন সমন্বয় পরবর্তী
+              Net after wholesale commission
             </p>
           </div>
 
           <div className="min-w-0 rounded-xl border border-dark/10 bg-cream/40 p-3 sm:p-4">
             <span className="text-xs font-semibold text-dark/60">
-              পরিশোধিত নগদ/ডিজিটাল
+              Paid (Cash / Digital)
             </span>
             <p className="mt-1 break-words font-heading text-lg font-bold text-dark sm:text-xl">
-              ৳{toBnNum(shop.totalPaid || 0)}
+              {formatCurrency(shop.totalPaid || 0)}
             </p>
-            <p className="text-[11px] text-dark/50">গৃহীত পেমেন্ট</p>
+            <p className="text-[11px] text-dark/50">Received payments</p>
           </div>
 
           <div
@@ -970,17 +981,17 @@ function ShopDetailsView({
             }`}
           >
             <span className="text-xs font-semibold text-dark/60">
-              বকেয়া বিল (Due Amount)
+              Due Amount
             </span>
             <p
               className={`mt-1 break-words font-heading text-lg font-bold sm:text-xl ${
                 shopDue > 0 ? 'text-amber-800' : 'text-emerald-800'
               }`}
             >
-              ৳{toBnNum(shop.dueAmount || 0)}
+              {formatCurrency(shop.dueAmount || 0)}
             </p>
             <p className="text-[11px] text-dark/60">
-              {shopDue > 0 ? 'সমন্বয় বাকি আছে' : 'কোনো বকেয়া নেই'}
+              {shopDue > 0 ? 'Pending settlement' : 'No due balance'}
             </p>
           </div>
         </div>
@@ -993,21 +1004,21 @@ function ShopDetailsView({
           onClick={() => setActiveTab('orders')}
           className={tabCls('orders')}
         >
-          <FiShoppingBag /> অর্ডারের ইতিহাস ({toBnNum(shopOrders.length)})
+          <FiShoppingBag /> Order History ({shopOrders.length})
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('books')}
           className={tabCls('books')}
         >
-          <FiBookOpen /> সর্বাধিক বিক্রিত বই ({toBnNum(topBooks.length)})
+          <FiBookOpen /> Top Ordered Books ({topBooks.length})
         </button>
         <button
           type="button"
           onClick={() => setActiveTab('ledger')}
           className={tabCls('ledger')}
         >
-          <FiCreditCard /> লেনদেন ও বকেয়া খাতা
+          <FiCreditCard /> Account Ledger & Dues
         </button>
       </div>
 
@@ -1016,13 +1027,13 @@ function ShopDetailsView({
         <div className="space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
             <h3 className="break-words font-heading text-base font-bold text-dark sm:text-lg">
-              {shop.shopName}-এর সকল কাউন্টার চালান
+              Counter Invoices — {shop.shopName}
             </h3>
             <div className="relative w-full sm:max-w-xs">
               <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-dark/40" />
               <input
                 type="text"
-                placeholder="চালান নং বা মন্তব্য দিয়ে খুঁজুন..."
+                placeholder="Search by invoice no. or note..."
                 value={searchOrder}
                 onChange={e => setSearchOrder(e.target.value)}
                 className="w-full rounded-xl border border-dark/15 bg-white py-2.5 pl-9 pr-3 text-xs text-dark focus:border-primary focus:outline-none"
@@ -1034,7 +1045,7 @@ function ShopDetailsView({
           <div className="space-y-3 lg:hidden">
             {visibleOrders.length === 0 ? (
               <div className="rounded-2xl border border-dark/10 bg-white py-8 text-center text-xs text-dark/50">
-                কোনো চালান পাওয়া যায়নি।
+                No invoices found.
               </div>
             ) : (
               visibleOrders.map(order => {
@@ -1056,45 +1067,35 @@ function ShopDetailsView({
                       </div>
                       {f.due > 0 ? (
                         <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-800">
-                          বকেয়া ৳{toBnNum(f.due)}
+                          Due {formatCurrency(f.due)}
                         </span>
                       ) : (
                         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-bold text-emerald-800">
-                          <FiCheckCircle size={12} /> পরিশোধিত
+                          <FiCheckCircle size={12} /> Paid
                         </span>
                       )}
                     </div>
 
                     <p className="mt-2 text-xs font-semibold text-dark">
-                      {toBnNum(f.copies)} কপি ({toBnNum(f.items.length)} পদবী)
-                    </p>
-                    <p className="line-clamp-1 text-[11px] text-dark/60">
-                      {f.items.map(i => i.title).join(', ')}
+                      {f.copies} {f.copies === 1 ? 'copy' : 'copies'} ({f.items.length}{' '}
+                      {f.items.length === 1 ? 'title' : 'titles'})
                     </p>
 
-                    <div className="mt-3 grid grid-cols-3 gap-2 border-t border-dark/10 pt-3 text-xs">
+                    <div className="mt-3 grid grid-cols-2 gap-2 border-t border-dark/10 pt-3 text-xs">
                       <div>
                         <span className="block text-[11px] text-dark/50">
-                          চালান মূল্য
+                          Invoice Total
                         </span>
                         <span className="font-heading font-bold text-dark">
-                          ৳{toBnNum(f.total)}
+                          {formatCurrency(f.total)}
                         </span>
                       </div>
                       <div>
                         <span className="block text-[11px] text-dark/50">
-                          পরিশোধিত
-                        </span>
-                        <span className="font-mono font-bold text-emerald-700">
-                          ৳{toBnNum(f.paid)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="block text-[11px] text-dark/50">
-                          কমিশন
+                          Commission
                         </span>
                         <span className="font-bold text-emerald-800">
-                          {toBnNum(f.commission)}%
+                          {f.commission}%
                         </span>
                       </div>
                     </div>
@@ -1103,16 +1104,9 @@ function ShopDetailsView({
                       <span className="rounded-md bg-dark/5 px-2 py-1 text-[11px] font-semibold text-dark/70">
                         {paymentLabel(order.paymentMethod)}
                       </span>
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.stopPropagation();
-                          onOpenOrderModal(order, shop);
-                        }}
-                        className="inline-flex items-center gap-1.5 rounded-lg border border-dark/15 bg-white px-3 py-1.5 text-xs font-semibold text-dark shadow-2xs transition hover:border-primary hover:bg-primary"
-                      >
-                        <FiEye /> চালান দেখুন
-                      </button>
+                      <span className="text-[11px] font-medium text-dark/50">
+                        Tap row to view invoice
+                      </span>
                     </div>
                   </div>
                 );
@@ -1123,25 +1117,22 @@ function ShopDetailsView({
           {/* Desktop: table */}
           <div className="hidden overflow-hidden rounded-2xl border border-dark/10 bg-white shadow-2xs lg:block">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left text-xs">
+              <table className="w-full min-w-[720px] text-left text-xs">
                 <thead className="border-b border-dark/10 bg-dark/5 text-[11px] font-bold uppercase tracking-wider text-dark">
                   <tr>
-                    <th className="px-4 py-3">চালান নং ও তারিখ</th>
-                    <th className="px-4 py-3">বইয়ের বিবরণ</th>
-                    <th className="px-4 py-3 text-right">গায়ের দাম</th>
-                    <th className="px-4 py-3 text-center">কমিশন</th>
-                    <th className="px-4 py-3 text-right">চালান মূল্য</th>
-                    <th className="px-4 py-3 text-right">পরিশোধিত</th>
-                    <th className="px-4 py-3 text-right">বকেয়া</th>
-                    <th className="px-4 py-3 text-center">পেমেন্ট মেথড</th>
-                    <th className="px-4 py-3 text-right">অ্যাকশন</th>
+                    <th className="px-4 py-3">Invoice No. & Date</th>
+                    <th className="px-4 py-3">Book Details</th>
+                    <th className="px-4 py-3 text-center">Commission</th>
+                    <th className="px-4 py-3 text-right">Invoice Total</th>
+                    <th className="px-4 py-3 text-right">Due</th>
+                    <th className="px-4 py-3 text-center">Payment Method</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-dark/5">
                   {visibleOrders.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-dark/50">
-                        কোনো চালান পাওয়া যায়নি।
+                      <td colSpan={6} className="py-8 text-center text-dark/50">
+                        No invoices found.
                       </td>
                     </tr>
                   ) : (
@@ -1163,40 +1154,29 @@ function ShopDetailsView({
                           </td>
 
                           <td className="px-4 py-3">
-                            <span className="block font-semibold text-dark">
-                              {toBnNum(f.copies)} কপি ({toBnNum(f.items.length)}{' '}
-                              পদবী)
+                            <span className="font-semibold text-dark">
+                              {f.copies} {f.copies === 1 ? 'copy' : 'copies'} ({f.items.length}{' '}
+                              {f.items.length === 1 ? 'title' : 'titles'})
                             </span>
-                            <span className="line-clamp-1 max-w-[200px] text-[11px] text-dark/60">
-                              {f.items.map(i => i.title).join(', ')}
-                            </span>
-                          </td>
-
-                          <td className="px-4 py-3 text-right font-mono text-dark/70">
-                            ৳{toBnNum(f.subtotal)}
                           </td>
 
                           <td className="px-4 py-3 text-center">
                             <span className="inline-block rounded bg-emerald-50 px-2 py-0.5 font-bold text-emerald-800">
-                              {toBnNum(f.commission)}%
+                              {f.commission}%
                             </span>
                           </td>
 
                           <td className="px-4 py-3 text-right font-heading text-sm font-bold text-dark">
-                            ৳{toBnNum(f.total)}
-                          </td>
-
-                          <td className="px-4 py-3 text-right font-mono font-medium text-emerald-700">
-                            ৳{toBnNum(f.paid)}
+                            {formatCurrency(f.total)}
                           </td>
 
                           <td className="px-4 py-3 text-right">
                             {f.due > 0 ? (
                               <span className="inline-block rounded-full bg-amber-100 px-2.5 py-0.5 font-bold text-amber-800">
-                                ৳{toBnNum(f.due)}
+                                {formatCurrency(f.due)}
                               </span>
                             ) : (
-                              <span className="font-mono text-dark/40">০</span>
+                              <span className="font-mono text-dark/40">0</span>
                             )}
                           </td>
 
@@ -1204,19 +1184,6 @@ function ShopDetailsView({
                             <span className="rounded-md bg-dark/5 px-2 py-1 font-semibold capitalize text-dark/70">
                               {paymentLabel(order.paymentMethod)}
                             </span>
-                          </td>
-
-                          <td
-                            className="px-4 py-3 text-right"
-                            onClick={e => e.stopPropagation()}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => onOpenOrderModal(order, shop)}
-                              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-dark/15 bg-white px-3 py-1.5 text-xs font-semibold text-dark shadow-2xs transition hover:border-primary hover:bg-primary"
-                            >
-                              <FiEye /> চালান দেখুন
-                            </button>
                           </td>
                         </tr>
                       );
@@ -1233,13 +1200,13 @@ function ShopDetailsView({
       {activeTab === 'books' && (
         <div className="space-y-4">
           <h3 className="break-words font-heading text-base font-bold text-dark sm:text-lg">
-            {shop.shopName}-এ সর্বাধিক সরবরাহকৃত বই
+            Top Supplied Books — {shop.shopName}
           </h3>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-3">
             {topBooks.length === 0 ? (
               <div className="col-span-full py-12 text-center text-dark/50">
-                এই দোকানের কোনো বইয়ের তথ্য নেই।
+                No book records found for this shop.
               </div>
             ) : (
               topBooks.map((book, idx) => (
@@ -1267,13 +1234,13 @@ function ShopDetailsView({
                     </p>
                     <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 border-t border-dark/10 pt-2 text-xs">
                       <span className="text-dark/70">
-                        মোট নিয়েছে:{' '}
+                        Total Taken:{' '}
                         <strong className="text-dark">
-                          {toBnNum(book.totalQuantity)} কপি
+                          {book.totalQuantity} copies
                         </strong>
                       </span>
                       <span className="font-heading font-bold text-emerald-700">
-                        ৳{toBnNum(book.totalSales)}
+                        {formatCurrency(book.totalSales)}
                       </span>
                     </div>
                   </div>
@@ -1289,14 +1256,14 @@ function ShopDetailsView({
         <div className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h3 className="font-heading text-base font-bold text-dark sm:text-lg">
-              দোকানের লেনদেন ও বকেয়া খাতা (Customer Account Ledger)
+              Customer Account Ledger & Dues
             </h3>
             <button
               type="button"
               onClick={() => window.print()}
               className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-dark/15 bg-white px-3 py-2 text-xs font-semibold text-dark hover:bg-cream sm:self-auto"
             >
-              <FiPrinter /> স্টেটমেন্ট প্রিন্ট
+              <FiPrinter /> Print Statement
             </button>
           </div>
 
@@ -1304,7 +1271,7 @@ function ShopDetailsView({
             <div className="divide-y divide-dark/10">
               {shopOrders.length === 0 && (
                 <p className="py-6 text-center text-xs text-dark/50">
-                  কোনো লেনদেন পাওয়া যায়নি।
+                  No transactions found.
                 </p>
               )}
               {shopOrders.map((order, i) => {
@@ -1329,32 +1296,32 @@ function ShopDetailsView({
                         </span>
                       </div>
                       <p className="mt-0.5 text-xs text-dark/70">
-                        পেমেন্ট পদ্ধতি: {order.paymentMethod || 'নগদ'} •{' '}
-                        {order.notes || 'নিয়মিত কাউন্টার বিক্রয়'}
+                        Payment Method: {paymentLabel(order.paymentMethod)} •{' '}
+                        {order.notes || 'Regular counter sale'}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-3 gap-3 text-xs sm:flex sm:items-center sm:gap-6 sm:text-right">
                       <div>
-                        <span className="block text-dark/50">চালান মূল্য</span>
+                        <span className="block text-dark/50">Invoice Total</span>
                         <span className="font-heading font-bold text-dark">
-                          ৳{toBnNum(total)}
+                          {formatCurrency(total)}
                         </span>
                       </div>
                       <div>
-                        <span className="block text-dark/50">জমা (Paid)</span>
+                        <span className="block text-dark/50">Paid</span>
                         <span className="font-mono font-bold text-emerald-700">
-                          ৳{toBnNum(paid)}
+                          {formatCurrency(paid)}
                         </span>
                       </div>
                       <div>
-                        <span className="block text-dark/50">বকেয়া (Due)</span>
+                        <span className="block text-dark/50">Due</span>
                         <span
                           className={`font-mono font-bold ${
                             due > 0 ? 'text-amber-800' : 'text-dark/40'
                           }`}
                         >
-                          ৳{toBnNum(due)}
+                          {formatCurrency(due)}
                         </span>
                       </div>
                     </div>
@@ -1375,12 +1342,12 @@ function ShopDetailsView({
 
 export default function ShopManagement({ embedded = false }) {
   const { orders = [], books = [] } = useData();
-  const { id: routeShopId } = useParams();
+  const { shopName: routeShopName, id: routeShopId } = useParams();
   const navigate = useNavigate();
 
   // Stored shops from localStorage / seed
   const [shopsList, setShopsList] = useState(getStoredShops);
-  const [selectedShopId, setSelectedShopId] = useState(routeShopId || null);
+  const [selectedShopId, setSelectedShopId] = useState(null);
 
   // Filters & Sorting
   const [search, setSearch] = useState('');
@@ -1431,7 +1398,8 @@ export default function ShopManagement({ embedded = false }) {
         if (
           order.phone &&
           shop.phone &&
-          order.phone.replace(/\D/g, '') === shop.phone.replace(/\D/g, '')
+          toEnDigits(order.phone).replace(/\D/g, '') ===
+            toEnDigits(shop.phone).replace(/\D/g, '')
         )
           return true;
         return false;
@@ -1478,6 +1446,7 @@ export default function ShopManagement({ embedded = false }) {
 
       return {
         ...shop,
+        phone: toEnDigits(shop.phone),
         orderCount,
         totalOrderValue,
         totalPaid,
@@ -1487,12 +1456,37 @@ export default function ShopManagement({ embedded = false }) {
     });
   }, [shopsList, allCounterOrders]);
 
-  // Active Selected Shop
+  // Active Selected Shop (matched by shop name in route, with fallback to selectedShopId or legacy ID)
   const activeShop = useMemo(() => {
-    const targetId = routeShopId || selectedShopId;
-    if (!targetId) return null;
-    return processedShops.find(s => String(s.id) === String(targetId)) || null;
-  }, [routeShopId, selectedShopId, processedShops]);
+    const rawParam = routeShopName ?? routeShopId;
+    if (!rawParam) {
+      return selectedShopId
+        ? processedShops.find(s => String(s.id) === String(selectedShopId)) || null
+        : null;
+    }
+
+    const decodedParam = decodeURIComponent(rawParam).trim();
+    const normalizedParam = decodedParam.toLowerCase();
+
+    if (selectedShopId) {
+      const selectedMatch = processedShops.find(
+        s =>
+          String(s.id) === String(selectedShopId) &&
+          (s.shopName?.trim().toLowerCase() === normalizedParam ||
+            s.shopName?.trim().replace(/\s+/g, '-').toLowerCase() === normalizedParam),
+      );
+      if (selectedMatch) return selectedMatch;
+    }
+
+    return (
+      processedShops.find(
+        s =>
+          s.shopName?.trim().toLowerCase() === normalizedParam ||
+          s.shopName?.trim().replace(/\s+/g, '-').toLowerCase() === normalizedParam ||
+          String(s.id) === String(decodedParam),
+      ) || null
+    );
+  }, [routeShopName, routeShopId, selectedShopId, processedShops]);
 
   // Filtered and Sorted Shops
   const visibleShops = useMemo(() => {
@@ -1501,9 +1495,22 @@ export default function ShopManagement({ embedded = false }) {
       .filter(shop => {
         if (dueFilter === 'due' && shop.dueAmount <= 0) return false;
         if (dueFilter === 'paid' && shop.dueAmount > 0) return false;
-        if (dueFilter === 'dhaka' && !shop.district?.includes('ঢাকা'))
+        if (
+          dueFilter === 'dhaka' &&
+          !(
+            shop.district?.includes('ঢাকা') ||
+            shop.district?.toLowerCase().includes('dhaka')
+          )
+        )
           return false;
-        if (dueFilter === 'ctg' && !shop.district?.includes('চট্টগ্রাম'))
+        if (
+          dueFilter === 'ctg' &&
+          !(
+            shop.district?.includes('চট্টগ্রাম') ||
+            shop.district?.toLowerCase().includes('chattogram') ||
+            shop.district?.toLowerCase().includes('chittagong')
+          )
+        )
           return false;
 
         if (!q) return true;
@@ -1521,7 +1528,7 @@ export default function ShopManagement({ embedded = false }) {
         if (sortBy === 'value') return b.totalOrderValue - a.totalOrderValue;
         if (sortBy === 'due') return b.dueAmount - a.dueAmount;
         if (sortBy === 'orders') return b.orderCount - a.orderCount;
-        return a.shopName.localeCompare(b.shopName, 'bn');
+        return a.shopName.localeCompare(b.shopName);
       });
   }, [processedShops, search, dueFilter, sortBy]);
 
@@ -1538,7 +1545,7 @@ export default function ShopManagement({ embedded = false }) {
   const handleSelectShop = shop => {
     setSelectedShopId(shop.id);
     if (!embedded) {
-      navigate(`/dashboard/all-users/shops/${shop.id}`);
+      navigate(`/dashboard/all-users/shops/${toShopRouteParam(shop.shopName)}`);
     }
   };
 
@@ -1575,13 +1582,6 @@ export default function ShopManagement({ embedded = false }) {
   if (activeShop) {
     return (
       <div className="space-y-5 sm:space-y-6">
-        {!embedded && (
-          <PageHeader
-            title={`${activeShop.shopName} — প্রোফাইল ও অর্ডার হিস্ট্রি`}
-            subtitle="দোকানের বিস্তারিত তথ্য, ক্রয়কৃত চালান এবং বকেয়া লেজার হিসাব"
-          />
-        )}
-
         <ShopDetailsView
           shop={activeShop}
           onBack={handleBackToList}
@@ -1623,8 +1623,8 @@ export default function ShopManagement({ embedded = false }) {
       {/* Page Header (Hidden when embedded in Counter Sales) */}
       {!embedded && (
         <PageHeader
-          title="দোকান ও কাউন্টার গ্রাহক (Shop Management)"
-          subtitle="কাউন্টার ও শোরুম থেকে সরাসরি বই নেওয়া বুকশপ, লাইব্রেরি ও পাইকারি গ্রাহকদের তালিকা ও প্রোফাইল"
+          title="Shop Management"
+          description="Directory and profiles of bookshops, libraries, and wholesale counter customers."
         />
       )}
 
@@ -1632,45 +1632,45 @@ export default function ShopManagement({ embedded = false }) {
       <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
         <div className="min-w-0 rounded-2xl border border-dark/10 bg-white p-3 shadow-2xs sm:p-4">
           <div className="flex items-center justify-between gap-2 text-dark/60">
-            <span className="text-xs font-semibold">নিবন্ধিত দোকান</span>
+            <span className="text-xs font-semibold">Registered Shops</span>
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20 text-dark">
               <FiShoppingBag className="text-base" />
             </div>
           </div>
           <p className="mt-2 font-heading text-xl font-bold text-dark sm:text-2xl">
-            {toBnNum(totalShopsCount)} টি
+            {totalShopsCount}
           </p>
           <p className="mt-0.5 text-[11px] text-dark/50">
-            বুকশপ ও লাইব্রেরি পার্টনার
+            Bookshop & library partners
           </p>
         </div>
 
         <div className="min-w-0 rounded-2xl border border-dark/10 bg-white p-3 shadow-2xs sm:p-4">
           <div className="flex items-center justify-between gap-2 text-dark/60">
-            <span className="text-xs font-semibold">মোট কাউন্টার বিক্রি</span>
+            <span className="text-xs font-semibold">Total Counter Sales</span>
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800">
               <FiTrendingUp className="text-base" />
             </div>
           </div>
           <p className="mt-2 break-words font-heading text-xl font-bold text-emerald-700 sm:text-2xl">
-            ৳{toBnNum(totalSalesAll)}
+            {formatCurrency(totalSalesAll)}
           </p>
           <p className="mt-0.5 text-[11px] text-dark/50">
-            সকল দোকানের সর্বমোট চালান
+            Combined invoices across shops
           </p>
         </div>
 
         <div className="min-w-0 rounded-2xl border border-dark/10 bg-white p-3 shadow-2xs sm:p-4">
           <div className="flex items-center justify-between gap-2 text-dark/60">
-            <span className="text-xs font-semibold">আদায়কৃত পেমেন্ট</span>
+            <span className="text-xs font-semibold">Collected Payments</span>
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-800">
               <FiDollarSign className="text-base" />
             </div>
           </div>
           <p className="mt-2 break-words font-heading text-xl font-bold text-dark sm:text-2xl">
-            ৳{toBnNum(totalPaidAll)}
+            {formatCurrency(totalPaidAll)}
           </p>
-          <p className="mt-0.5 text-[11px] text-dark/50">নগদ ও ডিজিটাল জমা</p>
+          <p className="mt-0.5 text-[11px] text-dark/50">Cash & digital deposits</p>
         </div>
 
         <div
@@ -1681,7 +1681,7 @@ export default function ShopManagement({ embedded = false }) {
           }`}
         >
           <div className="flex items-center justify-between gap-2 text-dark/60">
-            <span className="text-xs font-semibold">সর্বমোট বকেয়া (Due)</span>
+            <span className="text-xs font-semibold">Total Due</span>
             <div
               className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
                 totalDueAll > 0
@@ -1697,12 +1697,12 @@ export default function ShopManagement({ embedded = false }) {
               totalDueAll > 0 ? 'text-amber-800' : 'text-emerald-800'
             }`}
           >
-            ৳{toBnNum(totalDueAll)}
+            {formatCurrency(totalDueAll)}
           </p>
           <p className="mt-0.5 text-[11px] text-dark/60">
             {totalDueAll > 0
-              ? 'দোকানদারদের কাছে প্রাপ্য'
-              : 'সব বকেয়া পরিশোধিত'}
+              ? 'Receivable from shops'
+              : 'All dues settled'}
           </p>
         </div>
       </div>
@@ -1715,7 +1715,7 @@ export default function ShopManagement({ embedded = false }) {
             <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-dark/40" />
             <input
               type="text"
-              placeholder="দোকানের নাম, স্বত্বাধিকারী, মোবাইল নম্বর বা এলাকা খুঁজুন..."
+              placeholder="Search by shop name, owner, phone, or area..."
               value={search}
               onChange={e => setSearch(e.target.value)}
               className="w-full rounded-xl border border-dark/15 bg-cream/40 py-2.5 pl-10 pr-4 text-xs text-dark placeholder:text-dark/40 focus:border-primary focus:bg-white focus:outline-none sm:text-sm"
@@ -1730,12 +1730,12 @@ export default function ShopManagement({ embedded = false }) {
               className="w-full rounded-xl border border-dark/15 bg-white px-3 py-2.5 text-xs font-semibold text-dark focus:border-primary focus:outline-none sm:w-auto"
             >
               <option value="all">
-                সকল দোকান ({toBnNum(totalShopsCount)})
+                All Shops ({totalShopsCount})
               </option>
-              <option value="due">বকেয়া রয়েছে এমন</option>
-              <option value="paid">পরিশোধিত (Zero Due)</option>
-              <option value="dhaka">ঢাকা অঞ্চল</option>
-              <option value="ctg">চট্টগ্রাম অঞ্চল</option>
+              <option value="due">Has Due Balance</option>
+              <option value="paid">Paid (Zero Due)</option>
+              <option value="dhaka">Dhaka Region</option>
+              <option value="ctg">Chattogram Region</option>
             </select>
 
             <select
@@ -1743,10 +1743,10 @@ export default function ShopManagement({ embedded = false }) {
               onChange={e => setSortBy(e.target.value)}
               className="w-full rounded-xl border border-dark/15 bg-white px-3 py-2.5 text-xs font-semibold text-dark focus:border-primary focus:outline-none sm:w-auto"
             >
-              <option value="value">সর্বোচ্চ অর্ডার ভ্যালু</option>
-              <option value="due">সর্বোচ্চ বকেয়া</option>
-              <option value="orders">সর্বোচ্চ অর্ডার সংখ্যা</option>
-              <option value="name">দোকানের নাম (অ-আ)</option>
+              <option value="value">Highest Order Value</option>
+              <option value="due">Highest Due</option>
+              <option value="orders">Most Orders</option>
+              <option value="name">Shop Name (A-Z)</option>
             </select>
 
             <button
@@ -1754,7 +1754,7 @@ export default function ShopManagement({ embedded = false }) {
               onClick={() => setIsAddShopOpen(true)}
               className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-dark shadow-2xs transition hover:bg-primary-hover sm:col-auto"
             >
-              <FiPlus className="text-sm" /> নতুন দোকান যোগ করুন
+              <FiPlus className="text-sm" /> Add New Shop
             </button>
           </div>
         </div>
@@ -1764,7 +1764,7 @@ export default function ShopManagement({ embedded = false }) {
       <div className="space-y-3 lg:hidden">
         {visibleShops.length === 0 ? (
           <div className="rounded-2xl border border-dark/10 bg-white py-12 text-center text-xs text-dark/50">
-            কোনো দোকান খুঁজে পাওয়া যায়নি।
+            No shops found.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1795,11 +1795,11 @@ export default function ShopManagement({ embedded = false }) {
                   </div>
                   {shop.dueAmount > 0 ? (
                     <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-800">
-                      ৳{toBnNum(shop.dueAmount)} বকেয়া
+                      {formatCurrency(shop.dueAmount)} Due
                     </span>
                   ) : (
                     <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
-                      <FiCheckCircle size={12} /> পরিশোধিত
+                      <FiCheckCircle size={12} /> Paid
                     </span>
                   )}
                 </div>
@@ -1826,32 +1826,32 @@ export default function ShopManagement({ embedded = false }) {
                 <div className="mt-3 grid grid-cols-3 gap-2 border-t border-dark/10 pt-3 text-xs">
                   <div>
                     <span className="block text-[11px] text-dark/50">
-                      অর্ডার
+                      Orders
                     </span>
                     <span className="font-heading font-bold text-dark">
-                      {toBnNum(shop.orderCount)} টি
+                      {shop.orderCount}
                     </span>
                     <span className="block text-[10px] text-dark/50">
-                      {toBnNum(shop.totalItems)} কপি
+                      {shop.totalItems} copies
                     </span>
                   </div>
                   <div>
                     <span className="block text-[11px] text-dark/50">
-                      অর্ডার ভ্যালু
+                      Order Value
                     </span>
                     <span className="font-heading font-bold text-emerald-700">
-                      ৳{toBnNum(shop.totalOrderValue)}
+                      {formatCurrency(shop.totalOrderValue)}
                     </span>
                     <span className="block text-[10px] text-dark/50">
-                      জমা: ৳{toBnNum(shop.totalPaid)}
+                      Paid: {formatCurrency(shop.totalPaid)}
                     </span>
                   </div>
                   <div>
                     <span className="block text-[11px] text-dark/50">
-                      কমিশন
+                      Commission
                     </span>
                     <span className="font-bold text-dark/80">
-                      {toBnNum(shop.defaultCommission || 35)}%
+                      {shop.defaultCommission || 35}%
                     </span>
                   </div>
                 </div>
@@ -1864,7 +1864,7 @@ export default function ShopManagement({ embedded = false }) {
                   }}
                   className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dark/15 bg-white px-3 py-2 text-xs font-semibold text-dark shadow-2xs transition hover:border-primary hover:bg-primary"
                 >
-                  <FiEye /> বিস্তারিত
+                  <FiEye /> Details
                 </button>
               </div>
             ))}
@@ -1878,20 +1878,20 @@ export default function ShopManagement({ embedded = false }) {
           <table className="w-full min-w-[860px] text-left text-xs">
             <thead className="border-b border-dark/10 bg-dark/5 text-[11px] font-bold uppercase tracking-wider text-dark">
               <tr>
-                <th className="px-4 py-3.5">দোকানের নাম ও আইডি</th>
-                <th className="px-4 py-3.5">স্বত্বাধিকারী ও যোগাযোগ</th>
-                <th className="px-4 py-3.5 text-center">মোট অর্ডার</th>
-                <th className="px-4 py-3.5 text-right">মোট অর্ডার ভ্যালু</th>
-                <th className="px-4 py-3.5 text-right">ডিউ বিল (Due)</th>
-                <th className="px-4 py-3.5 text-center">কমিশন রেট</th>
-                <th className="px-4 py-3.5 text-right">অ্যাকশন</th>
+                <th className="px-4 py-3.5">Shop Name & Category</th>
+                <th className="px-4 py-3.5">Owner & Contact</th>
+                <th className="px-4 py-3.5 text-center">Total Orders</th>
+                <th className="px-4 py-3.5 text-right">Total Order Value</th>
+                <th className="px-4 py-3.5 text-right">Due Bill</th>
+                <th className="px-4 py-3.5 text-center">Commission Rate</th>
+                <th className="px-4 py-3.5 text-right">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-dark/5">
               {visibleShops.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-12 text-center text-dark/50">
-                    কোনো দোকান খুঁজে পাওয়া যায়নি।
+                    No shops found.
                   </td>
                 </tr>
               ) : (
@@ -1950,37 +1950,37 @@ export default function ShopManagement({ embedded = false }) {
 
                     <td className="px-4 py-3.5 text-center">
                       <span className="block font-heading text-sm font-bold text-dark">
-                        {toBnNum(shop.orderCount)} টি
+                        {shop.orderCount} {shop.orderCount === 1 ? 'order' : 'orders'}
                       </span>
                       <span className="text-[11px] text-dark/50">
-                        {toBnNum(shop.totalItems)} কপি বই
+                        {shop.totalItems} copies
                       </span>
                     </td>
 
                     <td className="px-4 py-3.5 text-right">
                       <span className="block font-heading text-sm font-bold text-emerald-700">
-                        ৳{toBnNum(shop.totalOrderValue)}
+                        {formatCurrency(shop.totalOrderValue)}
                       </span>
                       <span className="text-[11px] text-dark/50">
-                        পরিশোধিত: ৳{toBnNum(shop.totalPaid)}
+                        Paid: {formatCurrency(shop.totalPaid)}
                       </span>
                     </td>
 
                     <td className="px-4 py-3.5 text-right">
                       {shop.dueAmount > 0 ? (
                         <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2.5 py-0.5 font-bold text-amber-800">
-                          ৳{toBnNum(shop.dueAmount)} বকেয়া
+                          {formatCurrency(shop.dueAmount)} Due
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 font-bold text-emerald-800">
-                          <FiCheckCircle size={12} /> পরিশোধিত
+                          <FiCheckCircle size={12} /> Paid
                         </span>
                       )}
                     </td>
 
                     <td className="px-4 py-3.5 text-center">
                       <span className="rounded-md bg-dark/5 px-2 py-1 font-bold text-dark/80">
-                        {toBnNum(shop.defaultCommission || 35)}%
+                        {shop.defaultCommission || 35}%
                       </span>
                     </td>
 
@@ -1993,7 +1993,7 @@ export default function ShopManagement({ embedded = false }) {
                         onClick={() => handleSelectShop(shop)}
                         className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-dark/15 bg-white px-3 py-1.5 text-xs font-semibold text-dark shadow-2xs transition hover:border-primary hover:bg-primary"
                       >
-                        <FiEye /> বিস্তারিত
+                        <FiEye /> Details
                       </button>
                     </td>
                   </tr>

@@ -34,6 +34,7 @@ function DataTable({
   pagination = true,
   className = '',
   minWidth = 'min-w-full',
+  hoverable = true,
 }) {
   const [sortConfig, setSortConfig] = useState(null)
   const [filterValues, setFilterValues] = useState({})
@@ -186,7 +187,7 @@ function DataTable({
       {hasHeaderContent && (
         <div className="flex flex-col gap-4 border-b border-slate-100 px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
           {/* Left: Title & Subtitle */}
-          <div>
+          {/* <div>
             {title && (
               <h2 className="font-heading text-lg font-bold text-slate-800 tracking-tight">
                 {title}
@@ -197,14 +198,14 @@ function DataTable({
                 {subtitle}
               </p>
             )}
-          </div>
+          </div> */}
           {/* Right: Tabs, Filter buttons, Search */}
           <div className="flex flex-wrap items-center gap-2.5 sm:justify-end">
             {/* Tab Pills (like [All Shipments] [Delivered] ... in image) */}
             {tabs && tabs.length > 0 && (
               <div className="inline-flex items-center gap-1">
-                {tabs.map((tab) => {
-                  const isActive = activeTab === tab.id
+                {tabs.map(tab => {
+                  const isActive = activeTab === tab.id;
                   return (
                     <button
                       key={tab.id}
@@ -223,7 +224,7 @@ function DataTable({
                         </span>
                       )}
                     </button>
-                  )
+                  );
                 })}
               </div>
             )}
@@ -244,20 +245,20 @@ function DataTable({
                 <input
                   type="text"
                   value={query}
-                  onChange={(e) => {
-                    setPage(1)
-                    setQuery(e.target.value)
+                  onChange={e => {
+                    setPage(1);
+                    setQuery(e.target.value);
                   }}
                   placeholder={searchPlaceholder}
-                  className="h-10 w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-8 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition focus:border-blue-500 focus:outline-none focus-visible:outline-none"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-8 text-sm text-slate-800 placeholder:text-slate-400 outline-none transition focus:border-[#E5A72A] focus:outline-none focus-visible:outline-none"
                   aria-label={searchPlaceholder}
                 />
                 {query && (
                   <button
                     type="button"
                     onClick={() => {
-                      setPage(1)
-                      setQuery('')
+                      setPage(1);
+                      setQuery('');
                     }}
                     className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full p-0.5 text-slate-400 hover:text-slate-700"
                     aria-label="Clear search"
@@ -269,18 +270,20 @@ function DataTable({
             )}
 
             {/* Dropdown Filters styled as clean buttons */}
-            {filters.length > 0 && (
+            {/* {filters.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
-                {filters.map((filter) => (
+                {filters.map(filter => (
                   <select
                     key={filter.key}
                     value={filterValues[filter.key] ?? ''}
-                    onChange={(event) => updateFilter(filter.key, event.target.value)}
+                    onChange={event =>
+                      updateFilter(filter.key, event.target.value)
+                    }
                     aria-label={filter.label}
                     className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 outline-none transition hover:border-slate-300 focus:border-blue-500 focus:outline-none focus-visible:outline-none"
                   >
                     <option value="">{filter.label}</option>
-                    {filter.options.map((option) => (
+                    {filter.options.map(option => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
@@ -288,14 +291,16 @@ function DataTable({
                   </select>
                 ))}
               </div>
-            )}
+            )} */}
           </div>
         </div>
       )}
 
       {/* 2. Main Table */}
       <div className="overflow-x-auto">
-        <table className={`w-full ${minWidth} border-collapse text-left text-sm`}>
+        <table
+          className={`w-full ${minWidth} border-collapse text-left text-sm`}
+        >
           <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 text-xs font-medium text-slate-500 backdrop-blur-sm">
             <tr>
               {selectable && (
@@ -310,53 +315,32 @@ function DataTable({
                 </th>
               )}
 
-              {columns.map((column) => {
-                const isSorted = sortConfig?.key === column.key
+              {columns.map(column => {
                 const alignClass =
                   column.align === 'center'
                     ? 'text-center'
                     : column.align === 'right'
-                    ? 'text-right'
-                    : 'text-left'
+                      ? 'text-center'
+                      : 'text-left';
 
                 return (
                   <th
                     key={column.key}
                     style={column.width ? { width: column.width } : undefined}
-                    className={`whitespace-nowrap px-4 py-3 tracking-normal ${alignClass} ${
+                    className={`whitespace-nowrap px-4 py-3 tracking-normal   text-black text-sm  font-medium ${alignClass} ${
                       column.className || ''
                     }`}
                   >
-                    {column.sortable ? (
-                      <button
-                        type="button"
-                        onClick={() => toggleSort(column)}
-                        className={`group inline-flex whitespace-nowrap items-center gap-1.5 font-medium transition hover:text-slate-800 ${
-                          isSorted ? 'text-slate-900 font-semibold' : 'text-slate-500'
-                        }`}
-                      >
-                        <span>{column.header}</span>
-                        <span className="text-xs">
-                          {isSorted ? (
-                            sortConfig.direction === 'asc' ? (
-                              <span className="text-blue-600 font-bold">↑</span>
-                            ) : (
-                              <span className="text-blue-600 font-bold">↓</span>
-                            )
-                          ) : (
-                            <span className="text-slate-300 group-hover:text-slate-400 font-normal">↕</span>
-                          )}
-                        </span>
-                      </button>
-                    ) : (
-                      <span>{column.header}</span>
-                    )}
+                    <span>{column.header}</span>
                   </th>
-                )
+                );
               })}
 
               {rowActions && (
-                <th className="w-14 px-3 py-3 text-right font-medium" aria-label="Actions" />
+                <th
+                  className="w-14 px-3 py-3 text-right font-medium"
+                  aria-label="Actions"
+                />
               )}
             </tr>
           </thead>
@@ -364,71 +348,80 @@ function DataTable({
           <tbody className="divide-y divide-slate-100">
             {loading ? (
               <LoadingRows
-                columnCount={columns.length + (rowActions ? 1 : 0) + (selectable ? 1 : 0)}
+                columnCount={
+                  columns.length + (rowActions ? 1 : 0) + (selectable ? 1 : 0)
+                }
               />
             ) : visibleRows.length > 0 ? (
               visibleRows.map((row, index) => {
-                const isSelected = selectable && currentSelected.includes(row.id)
+                const isSelected =
+                  selectable && currentSelected.includes(row.id);
                 return (
                   <tr
                     key={row.id ?? index}
                     onClick={() => onRowClick?.(row)}
-                    className={`transition-colors duration-100 hover:bg-slate-50/50 ${
+                    className={`transition-colors duration-100 ${
+                      hoverable ? 'hover:bg-slate-50/50' : ''
+                    } ${
                       onRowClick ? 'cursor-pointer' : ''
                     } ${isSelected ? 'bg-blue-50/20' : ''}`}
                   >
                     {selectable && (
                       <td
                         className="px-3 py-3 text-center"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={e => e.stopPropagation()}
                       >
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggleSelectRow(row.id)}
                           aria-label={`Select row ${row.id}`}
-                          className="h-4 w-4 rounded border-slate-300 text-blue-600 outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus:ring-offset-0 cursor-pointer"
+                          className="h-4 w-4 rounded border-slate-300 text-[#E5A72A] outline-none focus:outline-none focus-visible:outline-none focus:ring-0 focus:ring-offset-0 cursor-pointer"
                         />
                       </td>
                     )}
 
-                    {columns.map((column) => {
+                    {columns.map(column => {
                       const alignClass =
                         column.align === 'center'
                           ? 'text-center'
                           : column.align === 'right'
-                          ? 'text-right'
-                          : 'text-left'
+                            ? 'text-right'
+                            : 'text-left';
 
                       return (
                         <td
                           key={column.key}
-                          style={column.width ? { width: column.width } : undefined}
-                          className={`px-4 py-3 text-slate-700 ${alignClass} ${
+                          style={
+                            column.width ? { width: column.width } : undefined
+                          }
+                          className={`px-2 py-1.5 text-slate-700 ${alignClass} ${
                             column.cellClassName || ''
                           }`}
                         >
-                          {column.render ? column.render(row, index) : row[column.key]}
+                          {column.render
+                            ? column.render(row, index)
+                            : row[column.key]}
                         </td>
-                      )
+                      );
                     })}
 
                     {rowActions && (
                       <td
                         className="relative px-3 py-3 text-right"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={e => e.stopPropagation()}
                       >
                         <button
                           type="button"
                           onClick={() =>
-                            setActiveActionRow((current) =>
+                            setActiveActionRow(current =>
                               current === row.id ? null : row.id,
                             )
                           }
                           className="rounded-lg p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                           aria-label="Row actions"
                         >
-                          <FiMoreVertical size={15} />
+                          {/* <FiMoreVertical size={15} /> */}
                         </button>
 
                         {activeActionRow === row.id && (
@@ -436,13 +429,13 @@ function DataTable({
                             {(typeof rowActions === 'function'
                               ? rowActions(row)
                               : rowActions
-                            ).map((action) => (
+                            ).map(action => (
                               <button
                                 type="button"
                                 key={action.label}
                                 onClick={() => {
-                                  action.onClick(row)
-                                  setActiveActionRow(null)
+                                  action.onClick(row);
+                                  setActiveActionRow(null);
                                 }}
                                 className={`block w-full rounded-lg px-3 py-2 text-xs font-medium transition hover:bg-slate-50 ${
                                   action.danger
@@ -458,7 +451,7 @@ function DataTable({
                       </td>
                     )}
                   </tr>
-                )
+                );
               })
             ) : (
               <tr>
@@ -483,21 +476,37 @@ function DataTable({
             <span>Show</span>
             <select
               value={rowsPerPage}
-              onChange={(event) => {
-                setRowsPerPage(Number(event.target.value))
-                setPage(1)
+              onChange={event => {
+                setRowsPerPage(Number(event.target.value));
+                setPage(1);
               }}
               className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:outline-none focus-visible:outline-none"
               aria-label="Rows per page"
             >
-              {[10, 25, 50, 100].map((size) => (
-                <option key={size} value={size}>{size}</option>
+              {[10, 25, 50, 100].map(size => (
+                <option key={size} value={size}>
+                  {size}
+                </option>
               ))}
             </select>
             <span>entries</span>
           </div>
 
-          <div className="flex items-center justify-center gap-1">
+          <div className="text-left md:text-center">
+            Showing{' '}
+            <strong className="font-semibold text-slate-800">
+              {startIndex}
+            </strong>{' '}
+            to{' '}
+            <strong className="font-semibold text-slate-800">{endIndex}</strong>{' '}
+            of{' '}
+            <strong className="font-semibold text-slate-800">
+              {sortedRows.length}
+            </strong>{' '}
+            entries
+          </div>
+
+          <div className="flex items-center justify-start md:justify-end gap-1">
             {/* Prev Button */}
             <button
               type="button"
@@ -520,10 +529,10 @@ function DataTable({
                     >
                       ...
                     </span>
-                  )
+                  );
                 }
 
-                const isActive = pageNum === currentPage
+                const isActive = pageNum === currentPage;
                 return (
                   <button
                     key={pageNum}
@@ -537,7 +546,7 @@ function DataTable({
                   >
                     {pageNum}
                   </button>
-                )
+                );
               })}
             </div>
 
@@ -552,15 +561,10 @@ function DataTable({
               <FiChevronRight size={16} />
             </button>
           </div>
-          <div className="text-left md:text-right">
-            Showing <strong className="font-semibold text-slate-800">{startIndex}</strong> to{' '}
-            <strong className="font-semibold text-slate-800">{endIndex}</strong> of{' '}
-            <strong className="font-semibold text-slate-800">{sortedRows.length}</strong> entries
-          </div>
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function LoadingRows({ columnCount }) {

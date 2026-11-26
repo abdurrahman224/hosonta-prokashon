@@ -1,27 +1,35 @@
+import theme from './src/theme/theme.js'
+
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
       colors: {
+        brand: theme.colors.brand,
+        ink: theme.colors.ink,
+        line: theme.colors.line,
+        surface: theme.colors.surface,
+        status: theme.colors.status,
         primary: {
-          DEFAULT: '#FDB82E',
-          hover: '#E5A316',
+          DEFAULT: theme.colors.brand.DEFAULT,
+          hover: theme.colors.brand.hover,
         },
         dark: {
-          DEFAULT: '#0A0A0A',
-          gray: '#262626',
-          muted: '#525252',
-          light: '#A3A3A3',
+          DEFAULT: theme.colors.public.dark,
+          gray: theme.colors.public.darkGray,
+          muted: theme.colors.ink.muted,
+          light: theme.colors.public.darkLight,
         },
-        cream: '#FAF7F0',
+        cream: theme.colors.public.cream,
       },
-      fontFamily: {
-        heading: ['Anek Bangla', 'sans-serif'],
-        sans: ['Hind Siliguri', 'sans-serif'],
+      fontFamily: theme.fontFamily,
+      boxShadow: {
+        '2xs': theme.boxShadow['2xs'],
+        xs: theme.boxShadow.xs,
+        modal: theme.boxShadow.modal,
       },
     },
   },
   plugins: [],
 }
-

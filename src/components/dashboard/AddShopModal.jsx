@@ -14,8 +14,8 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
     altPhone: '',
     email: '',
     address: '',
-    district: 'ঢাকা',
-    category: 'পাইকারি ও রিটেইল বুকশপ',
+    district: 'Dhaka',
+    category: 'Wholesale & Retail Bookshop',
     defaultCommission: 35,
     tradeLicense: '',
     notes: '',
@@ -26,11 +26,11 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!form.shopName.trim()) {
-      toast.error('দোকানের নাম আবশ্যক');
+      toast.error('Shop name is required');
       return;
     }
     if (!form.phone.trim()) {
-      toast.error('মোবাইল নম্বর আবশ্যক');
+      toast.error('Phone number is required');
       return;
     }
 
@@ -40,7 +40,7 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
       defaultCommission: Number(form.defaultCommission) || 30,
     });
 
-    toast.success('নতুন দোকান সফলভাবে নিবন্ধিত হয়েছে!');
+    toast.success('New shop registered successfully!');
     if (onCreated) onCreated(newShop);
     onClose();
   };
@@ -55,7 +55,7 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
               <FiShoppingBag className="text-lg" />
             </div>
             <h3 className="font-heading text-base font-bold text-dark sm:text-lg">
-              নতুন দোকান / বুকশপ এড করুন
+              Add New Shop / Bookshop
             </h3>
           </div>
           <button
@@ -73,12 +73,12 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
             <div>
               <label className="mb-1 block text-xs font-bold text-dark">
-                দোকানের নাম <span className="text-red-500">*</span>
+                Shop Name <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 required
-                placeholder="উদাঃ বাতিঘর বুকশপ"
+                placeholder="e.g. Batighar Bookshop"
                 value={form.shopName}
                 onChange={(e) => setForm({ ...form, shopName: e.target.value })}
                 className={inputCls}
@@ -88,11 +88,11 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-bold text-dark">
-                  স্বত্বাধিকারী / প্রতিনিধির নাম
+                  Owner / Representative Name
                 </label>
                 <input
                   type="text"
-                  placeholder="প্রতিনিধির নাম"
+                  placeholder="Representative name"
                   value={form.representative}
                   onChange={(e) =>
                     setForm({ ...form, representative: e.target.value })
@@ -102,12 +102,12 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-bold text-dark">
-                  মোবাইল নম্বর <span className="text-red-500">*</span>
+                  Phone Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="০১৭১১-XXXXXX"
+                  placeholder="01711-XXXXXX"
                   value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
                   className={inputCls}
@@ -118,7 +118,7 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-bold text-dark">
-                  ইমেইল (ঐচ্ছিক)
+                  Email (Optional)
                 </label>
                 <input
                   type="email"
@@ -130,33 +130,33 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-bold text-dark">
-                  জেলা / অঞ্চল
+                  District / Region
                 </label>
                 <select
                   value={form.district}
                   onChange={(e) => setForm({ ...form, district: e.target.value })}
                   className={inputCls}
                 >
-                  <option value="ঢাকা">ঢাকা</option>
-                  <option value="চট্টগ্রাম">চট্টগ্রাম</option>
-                  <option value="রাজশাহী">রাজশাহী</option>
-                  <option value="সিলেট">সিলেট</option>
-                  <option value="খুলনা">খুলনা</option>
-                  <option value="বরিশাল">বরিশাল</option>
-                  <option value="রংপুর">রংপুর</option>
-                  <option value="ময়মনসিংহ">ময়মনসিংহ</option>
+                  <option value="Dhaka">Dhaka</option>
+                  <option value="Chattogram">Chattogram</option>
+                  <option value="Rajshahi">Rajshahi</option>
+                  <option value="Sylhet">Sylhet</option>
+                  <option value="Khulna">Khulna</option>
+                  <option value="Barishal">Barishal</option>
+                  <option value="Rangpur">Rangpur</option>
+                  <option value="Mymensingh">Mymensingh</option>
                 </select>
               </div>
             </div>
 
             <div>
               <label className="mb-1 block text-xs font-bold text-dark">
-                দোকানের ঠিকানা <span className="text-red-500">*</span>
+                Shop Address <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 required
-                placeholder="মার্কেট, রাস্তা, এলাকার ঠিকানা"
+                placeholder="Market, street, area address"
                 value={form.address}
                 onChange={(e) => setForm({ ...form, address: e.target.value })}
                 className={inputCls}
@@ -166,7 +166,7 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-bold text-dark">
-                  কমিশন হার (%)
+                  Commission Rate (%)
                 </label>
                 <input
                   type="number"
@@ -182,7 +182,7 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
               </div>
               <div>
                 <label className="mb-1 block text-xs font-bold text-dark">
-                  ট্রেড লাইসেন্স নং
+                  Trade License No.
                 </label>
                 <input
                   type="text"
@@ -198,11 +198,11 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
 
             <div>
               <label className="mb-1 block text-xs font-bold text-dark">
-                নোট / বিবরণ
+                Notes / Description
               </label>
               <textarea
                 rows={2}
-                placeholder="দোকান বা পার্টনারশিপ সংক্রান্ত মন্তব্য..."
+                placeholder="Notes about shop or partnership..."
                 value={form.notes}
                 onChange={(e) => setForm({ ...form, notes: e.target.value })}
                 className={inputCls}
@@ -217,13 +217,13 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
               onClick={onClose}
               className="rounded-lg px-4 py-2.5 text-xs font-semibold text-dark/70 hover:bg-dark/5 transition"
             >
-              বাতিল
+              Cancel
             </button>
             <button
               type="submit"
               className="rounded-lg bg-primary px-5 py-2.5 text-xs font-bold text-dark shadow-2xs hover:bg-primary-hover transition"
             >
-              দোকান সংরক্ষণ করুন
+              Save Shop
             </button>
           </div>
         </form>

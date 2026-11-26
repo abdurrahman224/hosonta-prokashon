@@ -5,7 +5,8 @@
 body {
   margin: 0;
   min-width: 320px;
-  background: #faf7f0;
+  background: var(--color-cream);
+  color: var(--color-ink);
   font-family: 'Hind Siliguri', sans-serif;
   line-height: 1.65;
   -webkit-font-smoothing: antialiased;
@@ -23,10 +24,8 @@ html {
   scroll-behavior: smooth;
 }
 
-
-
 *:focus-visible {
-  outline: 2px solid #fdb82e;
+  outline: 2px solid var(--color-brand);
   outline-offset: 3px;
 }
 
@@ -42,13 +41,13 @@ select:focus-visible {
 
 .magazine-field:focus,
 .magazine-field:focus-visible {
-  border-color: #fdb82e;
+  border-color: var(--color-brand);
   outline: none;
   outline-offset: 0;
 }
 
 .magazine-field-error:not(:focus) {
-  border-color: #ef4444;
+  border-color: var(--color-status-danger);
 }
 
 @media (prefers-reduced-motion: reduce) {

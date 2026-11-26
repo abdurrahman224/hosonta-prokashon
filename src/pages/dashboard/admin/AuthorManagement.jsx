@@ -6,6 +6,7 @@ import {
   FiCheck,
   FiCheckCircle,
   FiClock,
+  FiCopy,
   FiDollarSign,
   FiEdit2,
   FiEye,
@@ -21,7 +22,6 @@ import StatusBadge from '../../../components/dashboard/StatusBadge';
 import { useAuth } from '../../../context/useAuth';
 import authors from '../../../data/authors';
 import { getStoredBooks, saveStoredBooks } from '../../../utils/authorStorage';
-import { formatCurrency } from '../../../utils/format';
 import {
   getAllPaymentRequests,
   updatePaymentRequestStatus,
@@ -55,6 +55,64 @@ const formatTime = iso =>
     hour: '2-digit',
     minute: '2-digit',
   });
+
+const formatCurrency = value => {
+  const num = Number(value || 0);
+  return `৳${num.toLocaleString('en-US', {
+    maximumFractionDigits: 2,
+  })}`;
+};
+
+const formatTaka = formatCurrency;
+
+function CopyableAccountNumber({ account, className = '' }) {
+  const [copied, setCopied] = useState(false);
+
+  if (!account) return <span className="text-slate-400">—</span>;
+
+  const handleCopy = e => {
+    e.stopPropagation();
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(account);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = account;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+      } catch (err) {
+        console.error('Copy failed:', err);
+      }
+      document.body.removeChild(textarea);
+    }
+    setCopied(true);
+    toast.success(`কপি করা হয়েছে: ${account}`);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className={`inline-flex items-center gap-1.5 ${className}`}>
+      <span className="font-mono text-xs font-semibold text-slate-800 select-all tracking-wider">
+        {account}
+      </span>
+      <button
+        type="button"
+        onClick={handleCopy}
+        title={copied ? 'Copied!' : 'Copy Account Number'}
+        className={`inline-flex h-6 w-6 items-center justify-center rounded-md transition ${
+          copied
+            ? 'bg-emerald-50 text-emerald-600'
+            : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+        }`}
+      >
+        {copied ? <FiCheck size={13} className="text-emerald-600" /> : <FiCopy size={13} />}
+      </button>
+    </div>
+  );
+}
 
 export default function AuthorManagement() {
   const { currentUser, approveAuthorApplication, can } = useAuth();
@@ -153,12 +211,26 @@ export default function AuthorManagement() {
         const units = Number(book.soldCopies) || Math.max(240 - index * 25, 35);
         const price = toNumber(book.price || 250);
         const royaltyType = book.royaltyType || 'percentage'; // 'percentage' | 'fixed'
-        const commissionPercent = Number(book.royaltyPercent) || (15 + (index % 3) * 5);
+        const commissionPercent =
+          book.royaltyPercent !== undefined
+            ? Number(book.royaltyPercent)
+            : 15 + (index % 3) * 5;
         const commissionPerCopy =
-          royaltyType === 'fixed' && book.royaltyPerCopy !== undefined
-            ? Number(book.royaltyPerCopy)
-            : Number(book.royaltyPerCopy) || Math.round(price * (commissionPercent / 100));
-        const authorCommission = units * commissionPerCopy;
+          royaltyType === 'percentage'
+            ? Number(((price * commissionPercent) / 100).toFixed(2))
+            : 0;
+        const fixedAmount =
+          royaltyType === 'fixed'
+            ? Number(
+                book.royaltyFixedAmount !== undefined
+                  ? book.royaltyFixedAmount
+                  : book.royaltyPerCopy || 0,
+              )
+            : 0;
+        const authorCommission =
+          royaltyType === 'fixed'
+            ? fixedAmount
+            : Number((units * commissionPerCopy).toFixed(2));
         const totalSales = units * price;
 
         return {
@@ -173,21 +245,42 @@ export default function AuthorManagement() {
           royaltyType,
           commissionPercent,
           commissionPerCopy,
+          fixedAmount,
           authorCommission,
           totalSales,
         };
       });
   }, [booksList]);
 
-  const handleUpdateBookRoyalty = (bookId, royaltyType, newPercent, newPerCopy) => {
+  const handleUpdateBookRoyalty = ({
+    bookId,
+    type,
+    price,
+    percent,
+    fixedAmount,
+  }) => {
+    const royaltyType = type === 'fixed' ? 'fixed' : 'percentage';
+    const numericPrice = Math.max(0, Number(price) || 0);
+    const numericPercent = Math.min(100, Math.max(0, Number(percent) || 0));
+    const numericFixed = Math.max(0, Number(fixedAmount) || 0);
+    const perCopy = Number(((numericPrice * numericPercent) / 100).toFixed(2));
+
     const currentBooks = getStoredBooks();
     const updated = currentBooks.map(b => {
       if (String(b.id) === String(bookId)) {
+        if (royaltyType === 'fixed') {
+          return {
+            ...b,
+            royaltyType: 'fixed',
+            royaltyFixedAmount: numericFixed,
+          };
+        }
         return {
           ...b,
-          royaltyType: royaltyType || 'percentage',
-          royaltyPercent: Number(newPercent),
-          royaltyPerCopy: Number(newPerCopy),
+          price: numericPrice,
+          royaltyType: 'percentage',
+          royaltyPercent: numericPercent,
+          royaltyPerCopy: perCopy,
         };
       }
       return b;
@@ -317,23 +410,28 @@ export default function AuthorManagement() {
   // Filtered payout requests by tab
   const filteredPayoutRequests = useMemo(() => {
     if (payoutFilterTab === 'all') return payoutRequests;
-    return payoutRequests.filter(r => r.status === payoutFilterTab);
+    if (payoutFilterTab === 'paid') {
+      return payoutRequests.filter(r => ['paid', 'completed'].includes(r.status?.toLowerCase()));
+    }
+    return payoutRequests.filter(r => r.status?.toLowerCase() === payoutFilterTab.toLowerCase());
   }, [payoutRequests, payoutFilterTab]);
 
   // Payout tabs config
   const payoutTabsConfig = useMemo(() => {
     const all = payoutRequests.length;
-    const pending = payoutRequests.filter(r => r.status === 'pending').length;
-    const approved = payoutRequests.filter(r => r.status === 'approved').length;
-    const completed = payoutRequests.filter(r => r.status === 'completed').length;
-    const rejected = payoutRequests.filter(r => r.status === 'rejected').length;
+    const pending = payoutRequests.filter(r => r.status?.toLowerCase() === 'pending').length;
+    const approved = payoutRequests.filter(r => r.status?.toLowerCase() === 'approved').length;
+    const paid = payoutRequests.filter(r => ['paid', 'completed'].includes(r.status?.toLowerCase())).length;
+    const rejected = payoutRequests.filter(r => r.status?.toLowerCase() === 'rejected').length;
+    const cancelled = payoutRequests.filter(r => r.status?.toLowerCase() === 'cancelled').length;
 
     return [
       { key: 'all', label: `All Requests (${all})` },
       { key: 'pending', label: `Pending (${pending})` },
       { key: 'approved', label: `Approved (${approved})` },
-      { key: 'completed', label: `Completed (${completed})` },
+      { key: 'paid', label: `Paid (${paid})` },
       { key: 'rejected', label: `Rejected (${rejected})` },
+      { key: 'cancelled', label: `Cancelled (${cancelled})` },
     ];
   }, [payoutRequests]);
 
@@ -343,6 +441,22 @@ export default function AuthorManagement() {
     setPayoutActionModal(null);
     setPayoutAdminNote('');
     toast.success(`Payment request marked as ${newStatus}.`);
+  };
+
+  const getPayoutStatusSelectClass = val => {
+    switch (val) {
+      case 'Paid':
+        return 'border-emerald-200 bg-emerald-50 text-emerald-700 focus:border-emerald-500';
+      case 'Approved':
+        return 'border-blue-200 bg-blue-50 text-blue-700 focus:border-blue-500';
+      case 'Rejected':
+        return 'border-rose-200 bg-rose-50 text-rose-700 focus:border-rose-500';
+      case 'Cancelled':
+        return 'border-slate-200 bg-slate-100 text-slate-600 focus:border-slate-400';
+      case 'Pending':
+      default:
+        return 'border-sky-200 bg-sky-50 text-sky-700 focus:border-sky-500';
+    }
   };
 
   const authorOptions = useMemo(
@@ -361,203 +475,228 @@ export default function AuthorManagement() {
   const renderRoyaltyModal = () => {
     if (!editingBookRoyalty) return null;
     const isFixed = editingBookRoyalty.type === 'fixed';
+    const numericPrice = Math.max(0, Number(editingBookRoyalty.price) || 0);
+    const numericPercent = Math.min(100, Math.max(0, Number(editingBookRoyalty.percent) || 0));
+    const numericFixed = Math.max(0, Number(editingBookRoyalty.fixedAmount) || 0);
+    const perCopyEarned = Number(((numericPrice * numericPercent) / 100).toFixed(2));
+    const totalRoyaltyPreview = isFixed
+      ? numericFixed
+      : Number((editingBookRoyalty.units * perCopyEarned).toFixed(2));
 
     return (
-      <div className="fixed inset-0 z-60 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs">
-        <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-          <div className="flex items-start justify-between border-b border-slate-100 pb-3">
-            <div>
+      <div
+        onClick={() => setEditingBookRoyalty(null)}
+        className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-900/60 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+      >
+        <div
+          onClick={e => e.stopPropagation()}
+          className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+        >
+          {/* Sticky Modal Header */}
+          <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-6 sm:py-4">
+            <div className="min-w-0">
               <h3 className="font-heading text-base font-bold text-slate-900">
                 Update Royalty Rate
               </h3>
-              <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">
+              <p className="mt-0.5 line-clamp-1 text-xs text-slate-600">
                 Book: <strong>{editingBookRoyalty.title}</strong>
               </p>
             </div>
             <button
               type="button"
               onClick={() => setEditingBookRoyalty(null)}
-              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+              className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
               aria-label="Close"
             >
               <FiX size={18} />
             </button>
           </div>
 
-          <div className="rounded-xl bg-slate-50 p-3 text-xs space-y-1">
-            <div className="flex justify-between">
-              <span className="text-slate-500">Book Retail Price:</span>
-              <span className="font-semibold text-slate-800">
-                {formatCurrency(editingBookRoyalty.price)}
-              </span>
+          {/* Scrollable Modal Body */}
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+            <div className="space-y-1.5 rounded-xl bg-slate-50 p-3 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs sm:text-sm ">Book Retail Price:</span>
+                <span className="font-semibold text-xs sm:text-sm text-slate-900">
+                  {formatCurrency(numericPrice)}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs sm:text-sm ">Total Sold Copies:</span>
+                <span className="font-semibold text-xs sm:text-sm text-slate-900">
+                  {isFixed ? 'N/A' : `${editingBookRoyalty.units} copies`}
+                </span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Total Sold Copies:</span>
-              <span className="font-semibold text-slate-800">
-                {editingBookRoyalty.units} copies
-              </span>
-            </div>
-          </div>
 
-          {/* Model Type Selector: Percentage vs Fixed */}
-          <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
-              Royalty Model / Type
-            </label>
-            <div className="grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
-              <button
-                type="button"
-                onClick={() => {
-                  const calculatedPerCopy = Math.round(
-                    editingBookRoyalty.price * (editingBookRoyalty.percent / 100),
-                  );
-                  setEditingBookRoyalty(prev => ({
-                    ...prev,
-                    type: 'percentage',
-                    perCopy: calculatedPerCopy,
-                  }));
-                }}
-                className={`rounded-lg py-2 px-3 text-xs font-semibold transition-all ${
-                  !isFixed
-                    ? 'bg-white text-blue-600 shadow-2xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Percentage (%)
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const calculatedPercent =
-                    editingBookRoyalty.price > 0
-                      ? Math.round(
-                          (editingBookRoyalty.perCopy / editingBookRoyalty.price) * 100,
-                        )
-                      : 0;
-                  setEditingBookRoyalty(prev => ({
-                    ...prev,
-                    type: 'fixed',
-                    percent: calculatedPercent,
-                  }));
-                }}
-                className={`rounded-lg py-2 px-3 text-xs font-semibold transition-all ${
-                  isFixed
-                    ? 'bg-white text-emerald-600 shadow-2xs font-bold'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                Fixed Amount (৳)
-              </button>
+            {/* Model Type Selector: Percentage vs Fixed */}
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-700">
+                Royalty Model / Type
+              </label>
+              <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingBookRoyalty(prev => ({
+                      ...prev,
+                      type: 'percentage',
+                    }))
+                  }
+                  className={`rounded-lg px-2 py-2 text-xs font-semibold transition-all ${
+                    !isFixed
+                      ? 'bg-primary text-dark shadow-2xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Percentage (%)
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setEditingBookRoyalty(prev => ({
+                      ...prev,
+                      type: 'fixed',
+                    }))
+                  }
+                  className={`rounded-lg px-2 py-2 text-xs font-semibold transition-all ${
+                    isFixed
+                      ? 'bg-primary text-dark shadow-2xs font-bold'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Fixed Amount (৳)
+                </button>
+              </div>
             </div>
-          </div>
 
-          <div className="space-y-3">
-            {!isFixed ? (
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Royalty Percentage (%)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={editingBookRoyalty.percent}
-                    onChange={e => {
-                      const val = Number(e.target.value) || 0;
-                      const calculatedPerCopy = Math.round(
-                        editingBookRoyalty.price * (val / 100),
-                      );
-                      setEditingBookRoyalty(prev => ({
-                        ...prev,
-                        percent: val,
-                        perCopy: calculatedPerCopy,
-                      }));
-                    }}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-500"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
-                    %
+            <div className="space-y-3">
+              {!isFixed ? (
+                <>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-700">
+                        Book Price (৳)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          value={editingBookRoyalty.price}
+                          onChange={e =>
+                            setEditingBookRoyalty(prev => ({
+                              ...prev,
+                              price: e.target.value === '' ? '' : Math.max(0, Number(e.target.value)),
+                            }))
+                          }
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 pr-8 text-sm text-slate-900 outline-none focus:border-primary"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
+                          ৳
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-700">
+                        Royalty Percentage (%)
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={editingBookRoyalty.percent}
+                          onChange={e =>
+                            setEditingBookRoyalty(prev => ({
+                              ...prev,
+                              percent:
+                                e.target.value === ''
+                                  ? ''
+                                  : Math.min(100, Math.max(0, Number(e.target.value))),
+                            }))
+                          }
+                          className="w-full rounded-xl border border-slate-200 px-3 py-2 pr-8 text-sm text-slate-900 outline-none focus:border-primary"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
+                          %
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Calculated author earnings:{' '}
+                    <strong>{formatCurrency(perCopyEarned)}</strong> per copy ({numericPercent}% of{' '}
+                    {formatCurrency(numericPrice)}).
+                  </p>
+                </>
+              ) : (
+                <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">
+                    Fixed Total Amount (৳)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="e.g. 10000"
+                      value={editingBookRoyalty.fixedAmount}
+                      onChange={e =>
+                        setEditingBookRoyalty(prev => ({
+                          ...prev,
+                          fixedAmount:
+                            e.target.value === '' ? '' : Math.max(0, Number(e.target.value)),
+                        }))
+                      }
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 pr-10 text-sm text-slate-900 outline-none focus:border-primary"
+                    />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
+                      ৳
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    One-time / total fixed royalty amount for this book (not multiplied by copies sold).
+                  </p>
+                </div>
+              )}
+
+              {/* Live Preview Box */}
+              <div className="space-y-1.5 rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-1.5">
+                  <span className="text-slate-600">Applied Rate:</span>
+                  <span className="text-right font-bold text-slate-900">
+                    {isFixed
+                      ? `Fixed Amount (${formatCurrency(numericFixed)})`
+                      : `${numericPercent}% of ${formatCurrency(numericPrice)} (${formatCurrency(perCopyEarned)} / copy)`}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Calculated author earnings: <strong>{formatCurrency(editingBookRoyalty.perCopy)}</strong> per copy.
-                </p>
-              </div>
-            ) : (
-              <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
-                  Fixed Amount Per Copy (৳)
-                </label>
-                <div className="relative">
-                  <input
-                    type="number"
-                    min="0"
-                    value={editingBookRoyalty.perCopy}
-                    onChange={e => {
-                      const val = Number(e.target.value) || 0;
-                      const calculatedPercent =
-                        editingBookRoyalty.price > 0
-                          ? Math.round((val / editingBookRoyalty.price) * 100)
-                          : 0;
-                      setEditingBookRoyalty(prev => ({
-                        ...prev,
-                        perCopy: val,
-                        percent: calculatedPercent,
-                      }));
-                    }}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-emerald-500"
-                  />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-slate-400">
-                    ৳ / copy
+                <div className="flex flex-wrap items-center justify-between gap-1.5 border-t border-slate-200 pt-1.5">
+                  <span className="font-semibold text-slate-800">
+                    {isFixed
+                      ? 'Total Royalty (Fixed):'
+                      : `Total Royalty (${editingBookRoyalty.units} copies):`}
+                  </span>
+                  <span className="font-heading text-sm font-bold text-emerald-700">
+                    {formatCurrency(totalRoyaltyPreview)}
                   </span>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-1">
-                  Fixed author share regardless of book discount (~<strong>{editingBookRoyalty.percent}%</strong> of price).
-                </p>
-              </div>
-            )}
-
-            {/* Live Preview Box */}
-            <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-3.5 text-xs space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-slate-600">Applied Rate:</span>
-                <span className="font-bold text-slate-900">
-                  {isFixed
-                    ? `${formatCurrency(editingBookRoyalty.perCopy)} / copy (Fixed Amount)`
-                    : `${editingBookRoyalty.percent}% of Book Price (${formatCurrency(editingBookRoyalty.perCopy)} / copy)`}
-                </span>
-              </div>
-              <div className="flex items-center justify-between border-t border-blue-100/60 pt-1.5">
-                <span className="font-semibold text-blue-900">
-                  Total Royalty ({editingBookRoyalty.units} copies):
-                </span>
-                <span className="font-heading font-bold text-emerald-600 text-sm">
-                  {formatCurrency(editingBookRoyalty.units * editingBookRoyalty.perCopy)}
-                </span>
               </div>
             </div>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2">
+          {/* Sticky Modal Footer */}
+          <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4">
             <button
               type="button"
               onClick={() => setEditingBookRoyalty(null)}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition sm:w-auto sm:py-2"
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={() =>
-                handleUpdateBookRoyalty(
-                  editingBookRoyalty.bookId,
-                  editingBookRoyalty.type || 'percentage',
-                  editingBookRoyalty.percent,
-                  editingBookRoyalty.perCopy,
-                )
-              }
-              className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition shadow-xs"
+              onClick={() => handleUpdateBookRoyalty(editingBookRoyalty)}
+              className="w-full rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-dark hover:bg-primary-hover transition shadow-xs sm:w-auto sm:py-2"
             >
               Save & Update
             </button>
@@ -572,64 +711,87 @@ export default function AuthorManagement() {
     <>
       {/* MODAL: View Payout Request Details */}
       {selectedPayout && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div
+          onClick={() => setSelectedPayout(null)}
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3.5 sm:px-6 sm:py-4">
               <h3 className="font-heading text-base font-bold text-slate-900">
                 Payment Request Details
               </h3>
               <button
                 type="button"
                 onClick={() => setSelectedPayout(null)}
-                className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Close"
               >
                 <FiX size={18} />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Request ID</span>
-                <span className="font-mono font-bold text-slate-800">#{selectedPayout.id}</span>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4 text-xs sm:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 py-1.5">
+                <span className="text-xs sm:text-sm text-slate-500">Request ID</span>
+                <span className="font-mono font-bold text-slate-800">
+                  #{selectedPayout.id}
+                </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Author</span>
-                <span className="font-semibold text-slate-800">{selectedPayout.authorName}</span>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 py-1.5">
+                <span className="text-xs sm:text-sm text-slate-500">Author</span>
+                <span className="font-semibold text-slate-800">
+                  {selectedPayout.authorName}
+                </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Amount Requested</span>
-                <span className="font-heading font-bold text-slate-900 text-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 py-1.5">
+                <span className="text-xs sm:text-sm text-slate-500">Amount Requested</span>
+                <span className="font-heading text-sm font-bold text-slate-900">
                   {formatCurrency(selectedPayout.amount)}
                 </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Payment Channel</span>
-                <span className="font-semibold text-slate-700">
-                  {selectedPayout.method} ({selectedPayout.account})
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 py-1.5">
+                <span className="text-xs sm:text-sm text-slate-500">Payment Method</span>
+                <span className="inline-block rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                  {selectedPayout.method}
                 </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Submission Date</span>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 py-1.5">
+                <span className="text-xs sm:text-sm text-slate-500">Account Number</span>
+                <CopyableAccountNumber account={selectedPayout.account} />
+              </div>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 py-1.5">
+                <span className="text-xs sm:text-sm text-slate-500">Submission Date</span>
                 <span className="text-slate-700">
-                  {formatDate(selectedPayout.requestDate || selectedPayout.requestedAt)}{' '}
-                  {formatTime(selectedPayout.requestDate || selectedPayout.requestedAt)}
+                  {formatDate(
+                    selectedPayout.requestDate || selectedPayout.requestedAt,
+                  )}{' '}
+                  {formatTime(
+                    selectedPayout.requestDate || selectedPayout.requestedAt,
+                  )}
                 </span>
               </div>
-              <div className="flex justify-between py-1 border-b border-slate-100">
-                <span className="text-slate-500">Current Status</span>
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 py-1.5">
+                <span className="text-xs sm:text-sm text-slate-500">Current Status</span>
                 <StatusBadge status={selectedPayout.status} />
               </div>
               {selectedPayout.authorNote && (
-                <div className="py-1 border-b border-slate-100">
-                  <span className="text-slate-500 block mb-1">Author's Note</span>
+                <div className="border-b border-slate-100 py-1.5">
+                  <span className="mb-1 block text-slate-500">
+                    Author's Note
+                  </span>
                   <p className="rounded-lg bg-slate-50 p-2 text-slate-700 italic">
                     "{selectedPayout.authorNote}"
                   </p>
                 </div>
               )}
               {selectedPayout.adminNote && (
-                <div className="py-1">
-                  <span className="text-slate-500 block mb-1">Admin Note / Feedback</span>
+                <div className="py-1.5">
+                  <span className="mb-1 block text-slate-500">
+                    Admin Note / Feedback
+                  </span>
                   <p className="rounded-lg bg-amber-50 p-2 text-amber-800">
                     {selectedPayout.adminNote}
                   </p>
@@ -637,11 +799,11 @@ export default function AuthorManagement() {
               )}
             </div>
 
-            <div className="flex justify-end pt-2">
+            <div className="flex shrink-0 justify-end border-t border-slate-100 px-4 py-3 sm:px-6 sm:py-4">
               <button
                 type="button"
                 onClick={() => setSelectedPayout(null)}
-                className="rounded-xl bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+                className="w-full rounded-xl bg-slate-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-slate-800 sm:w-auto sm:py-2"
               >
                 Close
               </button>
@@ -652,48 +814,74 @@ export default function AuthorManagement() {
 
       {/* MODAL: Payout Action Confirmation (Approve / Reject / Pay) */}
       {payoutActionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl space-y-4">
-            <h3 className="font-heading text-base font-bold text-slate-900">
-              {payoutActionModal.type === 'approve' && 'Approve Payment Request'}
-              {payoutActionModal.type === 'reject' && 'Reject Payment Request'}
-              {payoutActionModal.type === 'pay' && 'Confirm Payment Settlement'}
-            </h3>
-
-            <p className="text-xs text-slate-500">
-              Author: <strong>{payoutActionModal.request.authorName}</strong> | Amount:{' '}
-              <strong className="text-slate-900">
-                {formatCurrency(payoutActionModal.request.amount)}
-              </strong>
-            </p>
-
-            <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">
-                {payoutActionModal.type === 'pay'
-                  ? 'Transaction Reference / TrxID Note (Optional)'
-                  : 'Admin Note / Feedback (Optional)'}
-              </label>
-              <textarea
-                value={payoutAdminNote}
-                onChange={e => setPayoutAdminNote(e.target.value)}
-                placeholder={
-                  payoutActionModal.type === 'pay'
-                    ? 'e.g., bKash TrxID: 9X29A8812'
-                    : 'Enter note for the author...'
-                }
-                rows={3}
-                className="w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-900 outline-none focus:border-blue-500"
-              />
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
+        <div
+          onClick={() => {
+            setPayoutActionModal(null);
+            setPayoutAdminNote('');
+          }}
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3.5 sm:px-6 sm:py-4">
+              <h3 className="font-heading text-base font-bold text-slate-900">
+                {payoutActionModal.type === 'approve' &&
+                  'Approve Payment Request'}
+                {payoutActionModal.type === 'reject' && 'Reject Payment Request'}
+                {payoutActionModal.type === 'pay' && 'Confirm Payment Settlement'}
+              </h3>
               <button
                 type="button"
                 onClick={() => {
                   setPayoutActionModal(null);
                   setPayoutAdminNote('');
                 }}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Close"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+
+            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-6">
+              <p className="text-xs text-slate-500">
+                Author: <strong>{payoutActionModal.request.authorName}</strong> |
+                Amount:{' '}
+                <strong className="text-slate-900">
+                  {formatCurrency(payoutActionModal.request.amount)}
+                </strong>
+              </p>
+
+              <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700">
+                  {payoutActionModal.type === 'pay'
+                    ? 'Transaction Reference / TrxID Note (Optional)'
+                    : 'Admin Note / Feedback (Optional)'}
+                </label>
+                <textarea
+                  value={payoutAdminNote}
+                  onChange={e => setPayoutAdminNote(e.target.value)}
+                  placeholder={
+                    payoutActionModal.type === 'pay'
+                      ? 'e.g., bKash TrxID: 9X29A8812'
+                      : 'Enter note for the author...'
+                  }
+                  rows={3}
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-900 outline-none focus:border-primary"
+                />
+              </div>
+            </div>
+
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setPayoutActionModal(null);
+                  setPayoutAdminNote('');
+                }}
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 sm:w-auto sm:py-2"
               >
                 Cancel
               </button>
@@ -708,7 +896,7 @@ export default function AuthorManagement() {
                       payoutAdminNote,
                     )
                   }
-                  className="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs"
+                  className="w-full rounded-xl bg-primary px-4 py-2.5 text-xs font-semibold text-dark hover:bg-primary-hover shadow-xs sm:w-auto sm:py-2"
                 >
                   Approve Request
                 </button>
@@ -724,7 +912,7 @@ export default function AuthorManagement() {
                       payoutAdminNote,
                     )
                   }
-                  className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 shadow-xs"
+                  className="w-full rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-rose-700 shadow-xs sm:w-auto sm:py-2"
                 >
                   Reject Request
                 </button>
@@ -740,7 +928,7 @@ export default function AuthorManagement() {
                       payoutAdminNote,
                     )
                   }
-                  className="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 shadow-xs"
+                  className="w-full rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-700 shadow-xs sm:w-auto sm:py-2"
                 >
                   Confirm Paid
                 </button>
@@ -782,13 +970,12 @@ export default function AuthorManagement() {
           <button
             type="button"
             onClick={() => navigate(backUrl)}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition shadow-2xs"
+            className="inline-flex items-center gap-2 px-4 py-1 text-xs font-semibold text-slate-700  transition shadow-2xs"
           >
             <FiArrowLeft size={16} />
-            <span>Back to Authors Directory</span>
           </button>
           <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 border border-emerald-200">
-            ● Verified Active Author
+            ● Verified
           </span>
         </div>
 
@@ -805,12 +992,12 @@ export default function AuthorManagement() {
             />
             <div className="space-y-1.5 flex-1 min-w-0">
               <div className="flex flex-wrap items-center gap-3">
-                <h1 className="font-heading text-2xl font-bold text-slate-900">
+                <h1 className="font-heading text-xl font-semibold text-slate-900">
                   {currentAuthor.name}
                 </h1>
-                <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200">
+                {/* <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700 border border-blue-200">
                   Author ID: #{currentAuthor.id}
-                </span>
+                </span> */}
                 <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
                   {currentAuthor.role || 'Author'}
                 </span>
@@ -825,33 +1012,54 @@ export default function AuthorManagement() {
         {/* 4 Summary Stat Cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
-            <span className="text-xs font-medium text-slate-500 block">Published Books</span>
+            <span className="text-xs font-medium text-slate-500 block">
+              Published Books
+            </span>
             <span className="font-heading text-2xl font-bold text-slate-900 mt-1 block">
               {authorBooksList.length} Books
             </span>
-            <span className="text-[11px] text-slate-400 mt-1 block">Active catalog books</span>
+            <span className="text-[11px] text-slate-400 mt-1 block">
+              Active catalog books
+            </span>
           </div>
           <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
-            <span className="text-xs font-medium text-slate-500 block">Sold Copies</span>
+            <span className="text-xs font-medium text-slate-500 block">
+              Sold Copies
+            </span>
             <span className="font-heading text-2xl font-bold text-blue-600 mt-1 block">
-              {authorBooksList.reduce((sum, b) => sum + (b.units || 0), 0)} copies
+              {authorBooksList.reduce((sum, b) => sum + (b.units || 0), 0)}{' '}
+              copies
             </span>
-            <span className="text-[11px] text-slate-400 mt-1 block">Total copies ordered</span>
+            <span className="text-[11px] text-slate-400 mt-1 block">
+              Total copies ordered
+            </span>
           </div>
           <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
-            <span className="text-xs font-medium text-slate-500 block">Total Royalty Earned</span>
-            <span className="font-heading text-2xl font-bold text-purple-600 mt-1 block">
-              {formatCurrency(authorBooksList.reduce((sum, b) => sum + (b.authorCommission || 0), 0))}
+            <span className="text-xs font-medium text-slate-500 block">
+              Total Royalty Earned
             </span>
-            <span className="text-[11px] text-slate-400 mt-1 block">Earned from book sales</span>
+            <span className="font-heading text-2xl font-bold text-purple-600 mt-1 block">
+              {formatCurrency(
+                authorBooksList.reduce(
+                  (sum, b) => sum + (b.authorCommission || 0),
+                  0,
+                ),
+              )}
+            </span>
+            <span className="text-[11px] text-slate-400 mt-1 block">
+              Earned from book sales
+            </span>
           </div>
           <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-xs">
-            <span className="text-xs font-medium text-emerald-800 block">Total Due Balance</span>
+            <span className="text-xs font-medium text-emerald-800 block">
+              Total Due Balance
+            </span>
             <span className="font-heading text-2xl font-bold text-emerald-600 mt-1 block">
               {formatCurrency(currentAuthor.totalDue)}
             </span>
             <span className="text-[11px] text-slate-500 mt-1 block">
-              Earned: {formatCurrency(currentAuthor.totalEarned)} · Paid: {formatCurrency(currentAuthor.paidAmount)}
+              Earned: {formatCurrency(currentAuthor.totalEarned)} · Paid:{' '}
+              {formatCurrency(currentAuthor.paidAmount)}
             </span>
           </div>
         </div>
@@ -871,7 +1079,9 @@ export default function AuthorManagement() {
             <span>Published Books & Royalty</span>
             <span
               className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                authorDetailTab === 'books' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600'
+                authorDetailTab === 'books'
+                  ? 'bg-slate-700 text-white'
+                  : 'bg-slate-100 text-slate-600'
               }`}
             >
               {authorBooksList.length}
@@ -891,7 +1101,9 @@ export default function AuthorManagement() {
             <span>Payment & Payout History</span>
             <span
               className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                authorDetailTab === 'payouts' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600'
+                authorDetailTab === 'payouts'
+                  ? 'bg-slate-700 text-white'
+                  : 'bg-slate-100 text-slate-600'
               }`}
             >
               {authorPayoutHistory.length}
@@ -903,7 +1115,7 @@ export default function AuthorManagement() {
         {authorDetailTab === 'books' && (
           <div className="space-y-4">
             <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+              {/* <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
                 <div>
                   <h3 className="font-heading text-base font-bold text-slate-900">
                     Published Books & Royalty Settings
@@ -915,13 +1127,15 @@ export default function AuthorManagement() {
                 <span className="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
                   Total Books: {authorBooksList.length}
                 </span>
-              </div>
+              </div> */}
 
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-left text-xs">
-                  <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
-                    <tr>
-                      <th className="px-4 py-3.5">Book Details</th>
+                <table className="w-full min-w-[760px] border-collapse text-left text-xs">
+                  <thead className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold text-slate-700">
+                    <tr className="whitespace-nowrap">
+                      <th className="min-w-[240px] px-4 py-3.5">
+                        Book Details
+                      </th>
                       <th className="px-4 py-3.5">Unit Price</th>
                       <th className="px-4 py-3.5">Sold Copies</th>
                       <th className="px-4 py-3.5">Royalty Rate</th>
@@ -932,58 +1146,65 @@ export default function AuthorManagement() {
                   <tbody className="divide-y divide-slate-100">
                     {authorBooksList.length > 0 ? (
                       authorBooksList.map(book => (
-                        <tr key={book.id} className="hover:bg-slate-50/60 transition">
-                          <td className="px-4 py-3.5">
+                        <tr
+                          key={book.id}
+                          className="hover:bg-slate-50/60 transition"
+                        >
+                          <td className="min-w-[240px] px-4 py-3.5">
                             <div className="flex items-center gap-3.5">
                               <img
                                 src={book.cover}
                                 alt={book.title}
-                                className="h-14 w-10 rounded-lg object-cover shadow-2xs border border-slate-200 shrink-0"
+                                className="h-14 w-10 shrink-0 rounded-lg border border-slate-200 object-cover shadow-2xs"
                               />
-                              <div>
-                                <p className="font-semibold text-slate-900 text-sm line-clamp-1">{book.title}</p>
-                                <span className="inline-block mt-0.5 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                              <div className="min-w-0">
+                                <p className="font-semibold text-slate-900 text-sm whitespace-nowrap">
+                                  {book.title}
+                                </p>
+                                <span className="mt-0.5 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
                                   {book.category}
                                 </span>
-                                <span className="text-[11px] text-slate-400 block mt-0.5">Book ID: #{book.id}</span>
+                                <span className="mt-0.5 block text-[11px] text-slate-400">
+                                  Book ID: #{book.id}
+                                </span>
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3.5 font-medium text-slate-700">
+                          <td className="whitespace-nowrap px-4 py-3.5 font-medium text-slate-700">
                             {formatCurrency(book.price)}
                           </td>
-                          <td className="px-4 py-3.5 font-semibold text-slate-800">
-                            <span className="inline-block rounded-md bg-slate-100 px-2 py-1 text-xs">
-                              {book.units} copies
+                          <td className="whitespace-nowrap px-4 py-3.5 font-semibold text-slate-800">
+                            <span
+                              className={`inline-block rounded-md bg-slate-100 px-2 py-1 text-xs ${
+                                book.royaltyType === 'fixed' ? 'text-slate-500' : ''
+                              }`}
+                            >
+                              {book.royaltyType === 'fixed' ? 'N/A' : `${book.units} copies`}
                             </span>
                           </td>
-                          <td className="px-4 py-3.5">
+                          <td className="whitespace-nowrap px-4 py-3.5">
                             <div>
                               {book.royaltyType === 'fixed' ? (
                                 <>
                                   <span className="inline-block rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
-                                    {formatCurrency(book.commissionPerCopy)} / copy
+                                    Fixed Amount
                                   </span>
-                                  <span className="block text-[11px] font-medium text-slate-500 mt-1">
-                                    Fixed Rate (~{book.commissionPercent}%)
-                                  </span>
+                                   
                                 </>
                               ) : (
                                 <>
-                                  <span className="inline-block rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700 border border-blue-200">
+                                  <span className="inline-block rounded-lg bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 border border-emerald-200">
                                     {book.commissionPercent}%
                                   </span>
-                                  <span className="block text-[11px] font-medium text-slate-500 mt-1">
-                                    ({formatCurrency(book.commissionPerCopy)} / copy)
-                                  </span>
+                                  
                                 </>
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-3.5 font-heading font-bold text-sm text-emerald-600">
+                          <td className="whitespace-nowrap px-4 py-3.5 font-heading font-bold text-sm text-emerald-600">
                             {formatCurrency(book.authorCommission)}
                           </td>
-                          <td className="px-4 py-3.5 text-right">
+                          <td className="whitespace-nowrap px-4 py-3.5 text-right">
                             <button
                               type="button"
                               onClick={() =>
@@ -993,11 +1214,14 @@ export default function AuthorManagement() {
                                   price: book.price,
                                   type: book.royaltyType || 'percentage',
                                   percent: book.commissionPercent,
-                                  perCopy: book.commissionPerCopy,
+                                  fixedAmount:
+                                    book.royaltyType === 'fixed'
+                                      ? book.fixedAmount
+                                      : book.authorCommission || 10000,
                                   units: book.units,
                                 })
                               }
-                              className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-600 hover:text-white transition shadow-2xs"
+                              className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-600 hover:text-white transition shadow-2xs"
                             >
                               <FiEdit2 size={13} />
                               <span>Edit Royalty</span>
@@ -1007,7 +1231,10 @@ export default function AuthorManagement() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="py-12 text-center text-slate-400">
+                        <td
+                          colSpan={6}
+                          className="py-12 text-center text-slate-400"
+                        >
                           No published books found for this author.
                         </td>
                       </tr>
@@ -1029,7 +1256,9 @@ export default function AuthorManagement() {
                     Payment & Payout History
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    All royalty withdrawal requests, settlement channels, transaction references, and statuses for {currentAuthor.name}.
+                    All royalty withdrawal requests, settlement channels,
+                    transaction references, and statuses for{' '}
+                    {currentAuthor.name}.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -1045,12 +1274,13 @@ export default function AuthorManagement() {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full border-collapse text-left text-xs">
-                  <thead className="border-b border-slate-200 bg-slate-50/80 text-[11px] font-semibold text-slate-600 uppercase tracking-wider">
-                    <tr>
+                <table className="w-full min-w-[820px] border-collapse text-left text-xs">
+                  <thead className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold text-slate-700">
+                    <tr className="whitespace-nowrap">
                       <th className="px-4 py-3.5">Request ID</th>
                       <th className="px-4 py-3.5">Amount</th>
                       <th className="px-4 py-3.5">Payment Method</th>
+                      <th className="px-4 py-3.5">Account Number</th>
                       <th className="px-4 py-3.5">Requested Date</th>
                       <th className="px-4 py-3.5">Note / TrxID</th>
                       <th className="px-4 py-3.5">Status</th>
@@ -1060,7 +1290,10 @@ export default function AuthorManagement() {
                   <tbody className="divide-y divide-slate-100">
                     {authorPayoutHistory.length > 0 ? (
                       authorPayoutHistory.map(request => (
-                        <tr key={request.id} className="hover:bg-slate-50/60 transition">
+                        <tr
+                          key={request.id}
+                          className="hover:bg-slate-50/60 transition"
+                        >
                           <td className="px-4 py-3.5 font-mono font-semibold text-slate-700">
                             #{request.id}
                           </td>
@@ -1068,32 +1301,65 @@ export default function AuthorManagement() {
                             {formatCurrency(request.amount)}
                           </td>
                           <td className="px-4 py-3.5">
-                            <div>
-                              <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
-                                {request.method}
-                              </span>
-                              <span className="block text-[11px] font-mono text-slate-400 mt-0.5">
-                                {request.account}
-                              </span>
-                            </div>
+                            <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
+                              {request.method}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3.5">
+                            <CopyableAccountNumber account={request.account} />
                           </td>
                           <td className="px-4 py-3.5 text-slate-600">
                             <div>
                               <p className="font-medium text-slate-700">
-                                {formatDate(request.requestDate || request.requestedAt)}
+                                {formatDate(
+                                  request.requestDate || request.requestedAt,
+                                )}
                               </p>
                               <p className="text-[10px] text-slate-400">
-                                {formatTime(request.requestDate || request.requestedAt)}
+                                {formatTime(
+                                  request.requestDate || request.requestedAt,
+                                )}
                               </p>
                             </div>
                           </td>
                           <td className="px-4 py-3.5 max-w-xs">
                             <span className="line-clamp-2 text-slate-600 text-xs">
-                              {request.adminNote || request.note || request.authorNote || '—'}
+                              {request.adminNote ||
+                                request.note ||
+                                request.authorNote ||
+                                '—'}
                             </span>
                           </td>
                           <td className="px-4 py-3.5">
-                            <StatusBadge status={request.status} />
+                            {(() => {
+                              const currentStatus =
+                                request.status?.toLowerCase() === 'completed'
+                                  ? 'Paid'
+                                  : request.status
+                                    ? request.status.charAt(0).toUpperCase() +
+                                      request.status.slice(1).toLowerCase()
+                                    : 'Pending';
+                              return (
+                                <select
+                                  value={currentStatus}
+                                  onChange={e =>
+                                    handlePayoutStatusChange(
+                                      request.id,
+                                      e.target.value,
+                                    )
+                                  }
+                                  className={`h-7 rounded-lg border px-2 py-0.5 text-xs font-semibold cursor-pointer outline-none transition ${getPayoutStatusSelectClass(
+                                    currentStatus,
+                                  )}`}
+                                >
+                                  <option value="Pending">Pending</option>
+                                  <option value="Approved">Approved</option>
+                                  <option value="Paid">Paid</option>
+                                  <option value="Rejected">Rejected</option>
+                                  <option value="Cancelled">Cancelled</option>
+                                </select>
+                              );
+                            })()}
                           </td>
                           <td className="px-4 py-3.5 text-right">
                             <div className="flex items-center justify-end gap-1">
@@ -1110,7 +1376,12 @@ export default function AuthorManagement() {
                                 <>
                                   <button
                                     type="button"
-                                    onClick={() => setPayoutActionModal({ type: 'approve', request })}
+                                    onClick={() =>
+                                      setPayoutActionModal({
+                                        type: 'approve',
+                                        request,
+                                      })
+                                    }
                                     title="Approve Request"
                                     className="rounded-lg p-1.5 text-blue-600 hover:bg-blue-50 transition"
                                   >
@@ -1118,7 +1389,12 @@ export default function AuthorManagement() {
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => setPayoutActionModal({ type: 'reject', request })}
+                                    onClick={() =>
+                                      setPayoutActionModal({
+                                        type: 'reject',
+                                        request,
+                                      })
+                                    }
                                     title="Reject Request"
                                     className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50 transition"
                                   >
@@ -1130,7 +1406,12 @@ export default function AuthorManagement() {
                               {request.status?.toLowerCase() === 'approved' && (
                                 <button
                                   type="button"
-                                  onClick={() => setPayoutActionModal({ type: 'pay', request })}
+                                  onClick={() =>
+                                    setPayoutActionModal({
+                                      type: 'pay',
+                                      request,
+                                    })
+                                  }
                                   className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 transition shadow-2xs"
                                 >
                                   Mark as Paid
@@ -1142,8 +1423,12 @@ export default function AuthorManagement() {
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={7} className="py-12 text-center text-slate-400">
-                          No payment requests or payout history found for this author.
+                        <td
+                          colSpan={7}
+                          className="py-12 text-center text-slate-400"
+                        >
+                          No payment requests or payout history found for this
+                          author.
                         </td>
                       </tr>
                     )}
@@ -1168,77 +1453,97 @@ export default function AuthorManagement() {
       {/* Top Header */}
       <PageHeader
         title="Author Management"
-        description="Manage verified author profiles, review author applications, and handle royalties and payout requests."
+        // description="Manage verified author profiles, review author applications, and handle royalties and payout requests."
       />
 
       {/* Top KPI Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {/* Card 1: Verified Authors */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        {/* Card 1: Active Authors */}
         <div
           onClick={() => handleTabChange('directory')}
-          className={`cursor-pointer rounded-2xl border bg-white p-5 transition-all shadow-xs hover:border-blue-400 ${
-            activeTab === 'directory' ? 'border-blue-500 ring-2 ring-blue-500/10' : 'border-slate-200/80'
+          className={`w-[calc(50%-6px)] sm:w-48 cursor-pointer rounded-xl border bg-white px-3 py-2 transition-all shadow-2xs hover:border-slate-300 ${
+            activeTab === 'directory'
+              ? 'border-blue-500 ring-1 ring-blue-500/20'
+              : 'border-slate-200/80'
           }`}
         >
-          <div className="flex items-center justify-between">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-              <FiUsers size={18} />
-            </span>
-            <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-xs font-medium text-slate-500 truncate">
               Active Authors
             </span>
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-600">
+              <FiUsers size={12} />
+            </span>
           </div>
-          <p className="mt-3 text-xs font-medium text-slate-500">Total Registered Authors</p>
-          <p className="mt-1 font-heading text-2xl font-bold text-slate-900">
-            {visibleAuthors.length}
-          </p>
+          <div className="mt-0.5 flex items-baseline justify-between gap-1">
+            <span className="font-heading text-base font-bold text-slate-900 sm:text-lg">
+              {visibleAuthors.length}
+            </span>
+            <span className="text-[10px] text-slate-400">Total Registered</span>
+          </div>
         </div>
 
         {/* Card 2: Pending Applications */}
         <div
           onClick={() => handleTabChange('applications')}
-          className={`cursor-pointer rounded-2xl border bg-white p-5 transition-all shadow-xs hover:border-amber-400 ${
-            activeTab === 'applications' ? 'border-amber-500 ring-2 ring-amber-500/10' : 'border-slate-200/80'
+          className={`w-[calc(50%-6px)] sm:w-48 cursor-pointer rounded-xl border bg-white px-3 py-2 transition-all shadow-2xs hover:border-slate-300 ${
+            activeTab === 'applications'
+              ? 'border-amber-500 ring-1 ring-amber-500/20'
+              : 'border-slate-200/80'
           }`}
         >
-          <div className="flex items-center justify-between">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-              <FiFileText size={18} />
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-xs font-medium text-slate-500 truncate">
+              Applications
             </span>
-            <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-              pendingAppsCount > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
-            }`}>
-              {pendingAppsCount} Applications
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-600">
+              <FiFileText size={12} />
             </span>
           </div>
-          <p className="mt-3 text-xs font-medium text-slate-500">Pending Author Applications</p>
-          <p className="mt-1 font-heading text-2xl font-bold text-amber-600">
-            {pendingAppsCount} Pending
-          </p>
+          <div className="mt-0.5 flex items-baseline justify-between gap-1">
+            <span className="font-heading text-base font-bold text-amber-600 sm:text-lg">
+              {pendingAppsCount}
+            </span>
+            <span
+              className={`text-[10px] font-semibold ${
+                pendingAppsCount > 0 ? 'text-amber-600' : 'text-slate-400'
+              }`}
+            >
+              {pendingAppsCount > 0 ? `${pendingAppsCount} Pending` : 'Reviewed'}
+            </span>
+          </div>
         </div>
 
         {/* Card 3: Pending Payout Requests */}
         {canViewPayouts && (
           <div
             onClick={() => handleTabChange('payouts')}
-            className={`cursor-pointer rounded-2xl border bg-white p-5 transition-all shadow-xs hover:border-emerald-400 ${
-              activeTab === 'payouts' ? 'border-emerald-500 ring-2 ring-emerald-500/10' : 'border-slate-200/80'
+            className={`w-[calc(50%-6px)] sm:w-48 cursor-pointer rounded-xl border bg-white px-3 py-2 transition-all shadow-2xs hover:border-slate-300 ${
+              activeTab === 'payouts'
+                ? 'border-emerald-500 ring-1 ring-emerald-500/20'
+                : 'border-slate-200/80'
             }`}
           >
-            <div className="flex items-center justify-between">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-                <FiClock size={18} />
+            <div className="flex items-center justify-between gap-1.5">
+              <span className="text-xs font-medium text-slate-500 truncate">
+                Pending Payouts
               </span>
-              <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                pendingPayoutsCount > 0 ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
-              }`}>
-                {pendingPayoutsCount} Requests
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-600">
+                <FiClock size={12} />
               </span>
             </div>
-            <p className="mt-3 text-xs font-medium text-slate-500">Pending Payout Requests</p>
-            <p className="mt-1 font-heading text-2xl font-bold text-slate-900">
-              {formatCurrency(payoutStats.pendingTotal)}
-            </p>
+            <div className="mt-0.5 flex items-baseline justify-between gap-1">
+              <span className="font-heading text-base font-bold text-slate-900 sm:text-lg">
+                {formatTaka(payoutStats.pendingTotal)}
+              </span>
+              <span
+                className={`text-[10px] font-semibold ${
+                  pendingPayoutsCount > 0 ? 'text-amber-600' : 'text-slate-400'
+                }`}
+              >
+                {pendingPayoutsCount} Req
+              </span>
+            </div>
           </div>
         )}
 
@@ -1246,20 +1551,24 @@ export default function AuthorManagement() {
         {canViewPayouts && (
           <div
             onClick={() => handleTabChange('payouts')}
-            className="cursor-pointer rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs transition-all hover:border-slate-300"
+            className="w-[calc(50%-6px)] sm:w-48 cursor-pointer rounded-xl border border-slate-200/80 bg-white px-3 py-2 shadow-2xs transition-all hover:border-slate-300"
           >
-            <div className="flex items-center justify-between">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                <FiCheckCircle size={18} />
+            <div className="flex items-center justify-between gap-1.5">
+              <span className="text-xs font-medium text-slate-500 truncate">
+                Settled Royalties
               </span>
-              <span className="rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700">
-                Settled
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-600">
+                <FiCheckCircle size={12} />
               </span>
             </div>
-            <p className="mt-3 text-xs font-medium text-slate-500">Total Settled Royalties</p>
-            <p className="mt-1 font-heading text-2xl font-bold text-emerald-600">
-              {formatCurrency(payoutStats.paidTotal)}
-            </p>
+            <div className="mt-0.5 flex items-baseline justify-between gap-1">
+              <span className="font-heading text-base font-bold text-emerald-600 sm:text-lg">
+                {formatTaka(payoutStats.paidTotal)}
+              </span>
+              <span className="text-[10px] font-medium text-emerald-600">
+                Paid Total
+              </span>
+            </div>
           </div>
         )}
       </div>
@@ -1279,7 +1588,9 @@ export default function AuthorManagement() {
           <span>Authors Directory</span>
           <span
             className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-              activeTab === 'directory' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600'
+              activeTab === 'directory'
+                ? 'bg-slate-700 text-white'
+                : 'bg-slate-100 text-slate-600'
             }`}
           >
             {visibleAuthors.length}
@@ -1304,7 +1615,9 @@ export default function AuthorManagement() {
           ) : (
             <span
               className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                activeTab === 'applications' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-600'
+                activeTab === 'applications'
+                  ? 'bg-slate-700 text-white'
+                  : 'bg-slate-100 text-slate-600'
               }`}
             >
               {applications.length}
@@ -1345,91 +1658,60 @@ export default function AuthorManagement() {
             searchKeys={['name', 'bio']}
             searchPlaceholder="Search author name or bio..."
             onRowClick={author => navigate(getAuthorUrl(author.id))}
+            selectable={false}
             columns={[
               {
                 key: 'name',
                 header: 'Author Details',
-                sortable: true,
                 width: '240px',
                 render: author => (
-                  <Link
-                    to={getAuthorUrl(author.id)}
-                    className="flex items-center gap-3 cursor-pointer group"
-                  >
+                  <div className="flex items-center gap-3">
                     <img
-                      src={author.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=60'}
+                      src={
+                        author.photo ||
+                        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=60'
+                      }
                       alt={author.name}
-                      className="h-10 w-10 shrink-0 rounded-full object-cover shadow-2xs border border-slate-200 group-hover:border-blue-500 group-hover:scale-105 transition"
+                      className="h-10 w-10 shrink-0 rounded-full object-cover border border-slate-200"
                     />
                     <div>
-                      <span className="font-semibold text-slate-900 block text-xs group-hover:text-blue-600 transition underline-offset-2 group-hover:underline">
+                      <span className="font-semibold text-slate-900 block text-xs">
                         {author.name}
                       </span>
-                      <span className="text-[11px] text-slate-400">ID: #{author.id}</span>
+                     
                     </div>
-                  </Link>
+                  </div>
                 ),
               },
               {
                 key: 'bio',
                 header: 'Biography',
                 render: author => (
-                  <span className="line-clamp-2 max-w-md text-slate-600 text-xs leading-relaxed">
-                    {author.bio}
+                  <span
+                    className="block truncate max-w-xs text-xs text-slate-600"
+                    title={author.bio}
+                  >
+                    {author.bio || 'No biography provided'}
                   </span>
                 ),
               },
               {
                 key: 'booksCount',
                 header: 'Published Books',
-                sortable: true,
                 width: '160px',
-                sortValue: author => Number(author.booksCount || 0),
                 render: author => (
-                  <Link
-                    to={getAuthorUrl(author.id)}
-                    className="group inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50/50 transition shadow-2xs"
-                    title="View published books & royalty"
-                  >
-                    <FiBookOpen size={13} className="text-blue-500 group-hover:scale-110 transition-transform" />
-                    <span>{author.booksCount || 0} Books</span>
-                  </Link>
-                ),
-              },
-              {
-                key: 'actions',
-                header: 'Actions',
-                align: 'right',
-                width: '140px',
-                render: author => (
-                  <Link
-                    to={getAuthorUrl(author.id)}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50/70 px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-600 hover:text-white transition shadow-2xs"
-                  >
-                    <FiBookOpen size={13} />
-                    <span>View Books</span>
-                  </Link>
+                  <span className="text-xs font-medium text-slate-800">
+                    {author.booksCount || 0} Books
+                  </span>
                 ),
               },
               {
                 key: 'totalDue',
                 header: 'Total Due',
-                sortable: true,
-                sortValue: author => author.totalDue,
                 render: author => (
-                  <div>
-                    <span className="font-heading text-sm font-bold text-emerald-600 block">
-                      {formatCurrency(author.totalDue)}
-                    </span>
-                    <span className="text-[11px] text-slate-400 block mt-0.5">
-                      Earned: {formatCurrency(author.totalEarned)} · Paid: {formatCurrency(author.paidAmount)}
-                    </span>
-                    {author.pendingAmount > 0 && (
-                      <span className="inline-block mt-1 rounded bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
-                        Withdraw Pending: {formatCurrency(author.pendingAmount)}
-                      </span>
-                    )}
-                  </div>
+                  <span className="text-xs font-semibold text-slate-900">
+                    {formatTaka(author.totalDue)}
+                  </span>
                 ),
               },
               {
@@ -1473,8 +1755,12 @@ export default function AuthorManagement() {
                 sortable: true,
                 render: item => (
                   <div>
-                    <span className="font-semibold text-slate-800 block">{item.name}</span>
-                    <span className="text-[11px] text-slate-400">User ID: #{item.userId}</span>
+                    <span className="font-semibold text-slate-800 block">
+                      {item.name}
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      User ID: #{item.userId}
+                    </span>
                   </div>
                 ),
               },
@@ -1482,7 +1768,9 @@ export default function AuthorManagement() {
                 key: 'identity',
                 header: 'Identity / Occupation',
                 render: item => (
-                  <span className="text-xs text-slate-700">{item.identity || 'N/A'}</span>
+                  <span className="text-xs text-slate-700">
+                    {item.identity || 'N/A'}
+                  </span>
                 ),
               },
               {
@@ -1542,7 +1830,13 @@ export default function AuthorManagement() {
             activeTab={payoutFilterTab}
             onTabChange={setPayoutFilterTab}
             data={filteredPayoutRequests}
-            searchKeys={['id', 'authorName', 'authorEmail', 'method', 'account']}
+            searchKeys={[
+              'id',
+              'authorName',
+              'authorEmail',
+              'method',
+              'account',
+            ]}
             searchPlaceholder="Search author, request ID or account..."
             columns={[
               {
@@ -1589,14 +1883,18 @@ export default function AuthorManagement() {
                 key: 'method',
                 header: 'Payment Method',
                 render: request => (
-                  <div>
-                    <span className="inline-block rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-700">
-                      {request.method}
-                    </span>
-                    <span className="block text-[11px] font-mono text-slate-400 mt-0.5">
-                      {request.account}
-                    </span>
-                  </div>
+                  <span className="inline-block rounded-md bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700">
+                    {request.method}
+                  </span>
+                ),
+              },
+              {
+                key: 'account',
+                header: 'Account Number',
+                render: request => (
+                  <span className="font-mono text-xs font-semibold text-slate-800">
+                    {request.account}
+                  </span>
                 ),
               },
               {
@@ -1605,15 +1903,42 @@ export default function AuthorManagement() {
                 sortable: true,
                 render: request => (
                   <div className="text-xs">
-                    <p className="font-medium text-slate-700">{formatDate(request.requestDate)}</p>
-                    <p className="text-[10px] text-slate-400">{formatTime(request.requestDate)}</p>
+                    <p className="font-medium text-slate-700">
+                      {formatDate(request.requestDate)}
+                    </p>
+                    <p className="text-[10px] text-slate-400">
+                      {formatTime(request.requestDate)}
+                    </p>
                   </div>
                 ),
               },
               {
                 key: 'status',
                 header: 'Status',
-                render: request => <StatusBadge status={request.status} />,
+                render: request => {
+                  const currentStatus =
+                    request.status?.toLowerCase() === 'completed'
+                      ? 'Paid'
+                      : request.status
+                      ? request.status.charAt(0).toUpperCase() + request.status.slice(1).toLowerCase()
+                      : 'Pending';
+
+                  return (
+                    <select
+                      value={currentStatus}
+                      onChange={e => handlePayoutStatusChange(request.id, e.target.value)}
+                      className={`h-7 rounded-lg border px-2 py-0.5 text-xs font-semibold cursor-pointer outline-none transition ${getPayoutStatusSelectClass(
+                        currentStatus
+                      )}`}
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="Approved">Approved</option>
+                      <option value="Paid">Paid</option>
+                      <option value="Rejected">Rejected</option>
+                      <option value="Cancelled">Cancelled</option>
+                    </select>
+                  );
+                },
               },
               {
                 key: 'actions',
@@ -1630,11 +1955,13 @@ export default function AuthorManagement() {
                       <FiEye size={16} />
                     </button>
 
-                    {request.status === 'pending' && (
+                    {request.status?.toLowerCase() === 'pending' && (
                       <>
                         <button
                           type="button"
-                          onClick={() => setPayoutActionModal({ type: 'approve', request })}
+                          onClick={() =>
+                            setPayoutActionModal({ type: 'approve', request })
+                          }
                           title="Approve Request"
                           className="rounded-lg p-1.5 text-blue-600 hover:bg-blue-50"
                         >
@@ -1642,7 +1969,9 @@ export default function AuthorManagement() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => setPayoutActionModal({ type: 'reject', request })}
+                          onClick={() =>
+                            setPayoutActionModal({ type: 'reject', request })
+                          }
                           title="Reject Request"
                           className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50"
                         >
@@ -1651,10 +1980,12 @@ export default function AuthorManagement() {
                       </>
                     )}
 
-                    {request.status === 'approved' && (
+                    {request.status?.toLowerCase() === 'approved' && (
                       <button
                         type="button"
-                        onClick={() => setPayoutActionModal({ type: 'pay', request })}
+                        onClick={() =>
+                          setPayoutActionModal({ type: 'pay', request })
+                        }
                         className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
                       >
                         Mark as Paid
@@ -1675,7 +2006,8 @@ export default function AuthorManagement() {
                   Book-wise Author Royalty Breakdown
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Track real-time copies sold and royalty earnings per publication.
+                  Track real-time copies sold and royalty earnings per
+                  publication.
                 </p>
               </div>
             </div>
@@ -1707,7 +2039,9 @@ export default function AuthorManagement() {
                         <span className="font-semibold text-slate-800 line-clamp-1">
                           {book.title}
                         </span>
-                        <span className="text-xs text-slate-400">{book.category}</span>
+                        <span className="text-xs text-slate-400">
+                          {book.category}
+                        </span>
                       </div>
                     </div>
                   ),
@@ -1728,17 +2062,23 @@ export default function AuthorManagement() {
                   sortable: true,
                   sortValue: b => b.price,
                   render: book => (
-                    <span className="text-xs text-slate-600">{formatCurrency(book.price)}</span>
+                    <span className="text-xs text-slate-600">
+                      {formatCurrency(book.price)}
+                    </span>
                   ),
                 },
                 {
                   key: 'units',
                   header: 'Sold Copies',
                   sortable: true,
-                  sortValue: b => b.units,
+                  sortValue: b => (b.royaltyType === 'fixed' ? -1 : b.units),
                   render: book => (
-                    <span className="font-semibold text-slate-800 text-xs">
-                      {book.units} copies
+                    <span
+                      className={`font-semibold text-xs ${
+                        book.royaltyType === 'fixed' ? 'text-slate-400' : 'text-slate-800'
+                      }`}
+                    >
+                      {book.royaltyType === 'fixed' ? 'N/A' : `${book.units} copies`}
                     </span>
                   ),
                 },
@@ -1750,10 +2090,10 @@ export default function AuthorManagement() {
                       {book.royaltyType === 'fixed' ? (
                         <>
                           <span className="inline-block rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                            {formatCurrency(book.commissionPerCopy)} / copy
+                            Fixed Amount
                           </span>
                           <span className="block text-[11px] text-slate-400 mt-0.5">
-                            Fixed Rate (~{book.commissionPercent}%)
+                            Total: {formatCurrency(book.fixedAmount)}
                           </span>
                         </>
                       ) : (
@@ -1802,29 +2142,55 @@ export default function AuthorManagement() {
       {/* MODAL 1: Reject Application Reason Modal                  */}
       {/* ========================================================= */}
       {rejectingApp && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="font-heading text-lg font-bold text-slate-900">
-              Reason for Rejection
-            </h2>
-            <p className="mt-1 text-xs text-slate-500">
-              Applicant: <strong>{rejectingApp.name}</strong>
-            </p>
-            <textarea
-              value={appFeedback}
-              onChange={event => setAppFeedback(event.target.value)}
-              rows="4"
-              placeholder="Enter specific reason for rejecting this application..."
-              className="mt-3 w-full rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
-            />
-            <div className="mt-4 flex justify-end gap-2">
+        <div
+          onClick={() => {
+            setRejectingApp(null);
+            setAppFeedback('');
+          }}
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-900/50 p-0 backdrop-blur-xs sm:items-center sm:p-4"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
+          >
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3.5 sm:px-6 sm:py-4">
+              <div>
+                <h2 className="font-heading text-base font-bold text-slate-900 sm:text-lg">
+                  Reason for Rejection
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Applicant: <strong>{rejectingApp.name}</strong>
+                </p>
+              </div>
               <button
                 type="button"
                 onClick={() => {
                   setRejectingApp(null);
                   setAppFeedback('');
                 }}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label="Close"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+              <textarea
+                value={appFeedback}
+                onChange={event => setAppFeedback(event.target.value)}
+                rows="4"
+                placeholder="Enter specific reason for rejecting this application..."
+                className="w-full rounded-xl border border-slate-200 bg-white p-3 text-xs text-slate-900 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+              />
+            </div>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-slate-100 px-4 py-3 sm:flex-row sm:justify-end sm:px-6 sm:py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectingApp(null);
+                  setAppFeedback('');
+                }}
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 sm:w-auto sm:py-2"
               >
                 Cancel
               </button>
@@ -1835,7 +2201,7 @@ export default function AuthorManagement() {
                     ? decideApplication(rejectingApp, 'reject')
                     : toast.error('Please specify a rejection reason.')
                 }
-                className="rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 shadow-xs"
+                className="w-full rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-rose-700 shadow-xs sm:w-auto sm:py-2"
               >
                 Reject Application
               </button>
