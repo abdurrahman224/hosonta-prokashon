@@ -5,6 +5,7 @@ import Navbar from './Navbar'
 import { PageTransition } from '../common/Motion'
 import SEO from '../common/SEO'
 import AddedToCartModal from '../cart/AddedToCartModal'
+import LiveChatWidget from '../chat/LiveChatWidget'
 import { useCart } from '../../context/useCart'
 
 function MainLayout() {
@@ -27,6 +28,7 @@ function MainLayout() {
           onClose={closeLastAdded}
         />
       <Footer />
+      <LiveChatWidget />
       <Toaster
         position="top-center"
         toastOptions={{

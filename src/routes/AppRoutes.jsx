@@ -9,6 +9,7 @@ import authorRoutes from './author/authorRoutes'
 import userRoutes from './user/userRoutes'
 
 const DashboardLayout = lazy(() => import('../components/dashboard/DashboardLayout'))
+const PublicLiveChatPage = lazy(() => import('../pages/public/PublicLiveChatPage'))
 
 function RouteFallback() {
   return (
@@ -23,6 +24,7 @@ function AppRoutes() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         {publicRoutes}
+        <Route path="/live-chat" element={<PublicLiveChatPage />} />
         <Route
           element={
             <ProtectedRoute

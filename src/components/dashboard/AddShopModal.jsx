@@ -1,24 +1,25 @@
 import { useState } from 'react';
 import { FiShoppingBag, FiX } from 'react-icons/fi';
 import toast from 'react-hot-toast';
-import { addStoredShop } from '../../data/shops';
+import { addStoredShop, updateStoredShop } from '../../data/shops';
 
 const inputCls =
   'w-full rounded-lg border border-dark/15 px-3 py-2 text-sm text-dark focus:border-primary focus:outline-none';
 
-export default function AddShopModal({ isOpen, onClose, onCreated }) {
+export default function AddShopModal({ isOpen, onClose, onCreated, shop = null }) {
+  const isEditing = Boolean(shop?.id);
   const [form, setForm] = useState({
-    shopName: '',
-    representative: '',
-    phone: '',
-    altPhone: '',
-    email: '',
-    address: '',
-    district: 'Dhaka',
-    category: 'Wholesale',
-    defaultCommission: 35,
-    tradeLicense: '',
-    notes: '',
+    shopName: shop?.shopName || '',
+    representative: shop?.representative || shop?.ownerName || '',
+    phone: shop?.phone || '',
+    altPhone: shop?.altPhone || '',
+    email: shop?.email || '',
+    address: shop?.address || '',
+    district: shop?.district || 'Dhaka',
+    category: shop?.category || 'Wholesale',
+    defaultCommission: shop?.defaultCommission ?? 35,
+    tradeLicense: shop?.tradeLicense || '',
+    notes: shop?.notes || '',
   });
 
   if (!isOpen) return null;
@@ -34,14 +35,22 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
       return;
     }
 
-    const newShop = addStoredShop({
+    const payload = {
       ...form,
       ownerName: form.representative || form.shopName,
-      defaultCommission: Number(form.defaultCommission) || 30,
-    });
+      defaultCommission:
+        form.defaultCommission === '' ? 30 : Number(form.defaultCommission),
+    };
 
-    toast.success('Wholesale account added successfully!');
-    if (onCreated) onCreated(newShop);
+    if (isEditing) {
+      updateStoredShop(shop.id, payload);
+      toast.success('Wholesale account updated!');
+      if (onCreated) onCreated({ ...shop, ...payload });
+    } else {
+      const newShop = addStoredShop(payload);
+      toast.success('Wholesale account added successfully!');
+      if (onCreated) onCreated(newShop);
+    }
     onClose();
   };
 
@@ -53,7 +62,7 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
           <div className="flex min-w-0 items-center gap-2">
             <FiShoppingBag className="text-lg text-slate-700" />
             <h3 className="font-heading text-base font-bold text-dark sm:text-lg">
-              Add Wholesale
+              {isEditing ? 'Edit Wholesale' : 'Add Wholesale'}
             </h3>
           </div>
           <button
@@ -221,7 +230,7 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
               type="submit"
               className="rounded-lg bg-primary px-5 py-2.5 text-xs font-bold text-dark shadow-2xs hover:bg-primary-hover transition"
             >
-              Save Wholesale
+              {isEditing ? 'Save Changes' : 'Save Wholesale'}
             </button>
           </div>
         </form>

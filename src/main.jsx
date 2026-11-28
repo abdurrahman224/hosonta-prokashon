@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.jsx'
 import { applyThemeCssVariables } from './theme/theme.js'
 import { AuthProvider } from './context/AuthContext.jsx'
+import { ChatProvider } from './context/ChatContext.jsx'
 import { DataProvider } from './context/DataContext.jsx'
 import { CartProvider } from './context/CartContext.jsx'
 import { WishlistProvider } from './context/WishlistContext.jsx'
@@ -24,15 +25,17 @@ createRoot(document.getElementById('root')).render(
         }
       >
         <AuthProvider>
-          <DataProvider>
-            <CartProvider>
-              <WishlistProvider>
-                <ErrorBoundary>
-                  <App />
-                </ErrorBoundary>
-              </WishlistProvider>
-            </CartProvider>
-          </DataProvider>
+          <ChatProvider>
+            <DataProvider>
+              <CartProvider>
+                <WishlistProvider>
+                  <ErrorBoundary>
+                    <App />
+                  </ErrorBoundary>
+                </WishlistProvider>
+              </CartProvider>
+            </DataProvider>
+          </ChatProvider>
         </AuthProvider>
       </Suspense>
     </HelmetProvider>

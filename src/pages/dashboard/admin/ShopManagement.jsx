@@ -5,6 +5,7 @@ import {
   FiCheckCircle,
   FiCreditCard,
   FiDollarSign,
+  FiEdit2,
   FiEye,
   FiMail,
   FiMapPin,
@@ -22,7 +23,9 @@ import { FaWhatsapp } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import PageHeader from '../../../components/dashboard/PageHeader';
+import { useAuth } from '../../../context/useAuth';
 import { useData } from '../../../context/useData';
+import { ROLES } from '../../../utils/roles';
 import {
   getStoredShops,
 } from '../../../data/shops';
@@ -1522,6 +1525,8 @@ function ShopDetailsView({
 /* ------------------------------------------------------------------ */
 
 export default function ShopManagement({ embedded = false }) {
+  const { currentUser } = useAuth();
+  const isAdmin = currentUser?.role === ROLES.ADMIN;
   const { orders = [], books = [] } = useData();
   const { shopName: routeShopName, id: routeShopId } = useParams();
   const navigate = useNavigate();
@@ -1540,6 +1545,7 @@ export default function ShopManagement({ embedded = false }) {
   const [activeInvoiceOrder, setActiveInvoiceOrder] = useState(null);
   const [activeInvoiceShop, setActiveInvoiceShop] = useState(null);
   const [isAddShopOpen, setIsAddShopOpen] = useState(false);
+  const [editingShop, setEditingShop] = useState(null);
   const [paymentModalShop, setPaymentModalShop] = useState(null);
   const [dueMemoReceipt, setDueMemoReceipt] = useState(null);
 
@@ -1945,9 +1951,25 @@ export default function ShopManagement({ embedded = false }) {
                   </span>
                 </div>
 
-                <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                <div className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-500">
                   <span>{shop.phone}</span>
-                  <span>{shop.orderCount} orders · {formatCurrency(shop.totalOrderValue)}</span>
+                  <div className="flex items-center gap-2">
+                    <span>{shop.orderCount} orders · {formatCurrency(shop.totalOrderValue)}</span>
+                    {isAdmin && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingShop(shop);
+                        }}
+                        title="Edit Wholesale"
+                        aria-label="Edit Wholesale"
+                        className="rounded p-1 text-slate-500 hover:bg-slate-100 hover:text-dark transition"
+                      >
+                        <FiEdit2 size={13} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
@@ -2030,15 +2052,28 @@ export default function ShopManagement({ embedded = false }) {
                       className="whitespace-nowrap px-4 py-3.5 text-right"
                       onClick={e => e.stopPropagation()}
                     >
-                      <button
-                        type="button"
-                        onClick={() => handleSelectShop(shop)}
-                        title="View Wholesale Profile"
-                        aria-label="View Wholesale Profile"
-                        className="p-1 text-slate-500 hover:text-dark transition"
-                      >
-                        <FiEye size={16} />
-                      </button>
+                      <div className="inline-flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectShop(shop)}
+                          title="View Wholesale Profile"
+                          aria-label="View Wholesale Profile"
+                          className="p-1 text-slate-500 hover:text-dark transition"
+                        >
+                          <FiEye size={16} />
+                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => setEditingShop(shop)}
+                            title="Edit Wholesale"
+                            aria-label="Edit Wholesale"
+                            className="p-1 text-slate-500 hover:text-primary-hover transition"
+                          >
+                            <FiEdit2 size={15} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -2048,10 +2083,15 @@ export default function ShopManagement({ embedded = false }) {
         </div>
       </div>
 
-      {/* Add New Shop Modal */}
+      {/* Add / Edit Shop Modal */}
       <AddShopModal
-        isOpen={isAddShopOpen}
-        onClose={() => setIsAddShopOpen(false)}
+        key={editingShop?.id || (isAddShopOpen ? 'new' : 'closed')}
+        isOpen={isAddShopOpen || Boolean(editingShop)}
+        shop={editingShop}
+        onClose={() => {
+          setIsAddShopOpen(false);
+          setEditingShop(null);
+        }}
         onCreated={() => {
           setShopsList(getStoredShops());
         }}

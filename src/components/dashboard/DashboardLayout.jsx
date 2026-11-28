@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FiChevronDown, FiGlobe, FiLogOut, FiMenu, FiX } from 'react-icons/fi'
+import { FiChevronDown, FiGlobe, FiLogOut, FiMenu, FiMessageCircle, FiX } from 'react-icons/fi'
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/useAuth'
+import { useChat } from '../../context/useChat'
+import { isManagementRole } from '../../utils/liveChatStorage'
+import LiveChatWidget from '../chat/LiveChatWidget'
 import RoleBadge from './RoleBadge'
 import sidebarConfig from './sidebarConfig'
 import ErrorBoundary from '../common/ErrorBoundary'
@@ -14,6 +17,8 @@ import {
 
 function DashboardLayout() {
   const { currentUser, can, logout } = useAuth()
+  const { totalStaffUnreadCount } = useChat()
+  const isStaff = isManagementRole(currentUser.role)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [openFolders, setOpenFolders] = useState({})
   const [language, setLanguage] = useState(() =>
@@ -43,6 +48,7 @@ function DashboardLayout() {
     'Stock Inventory': 'স্টক ইনভেন্টরি',
     Manually: 'ম্যানুয়াল',
     Manuscripts: 'পাণ্ডুলিপি',
+    'Live Chat': 'লাইভ চ্যাট',
     Messages: 'বার্তা',
     Reports: 'রিপোর্ট',
     Settings: 'সেটিংস',
@@ -198,7 +204,12 @@ function DashboardLayout() {
                       onClick={() => setIsSidebarOpen(false)}
                     >
                       <Icon className="text-lg shrink-0" />
-                      <span className="truncate">{translateLabel(item.label)}</span>
+                      <span className="flex-1 truncate">{translateLabel(item.label)}</span>
+                      {item.path === '/dashboard/live-chat' && totalStaffUnreadCount > 0 && (
+                        <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-white/20 px-1.5 text-[10px] font-bold text-white">
+                          {totalStaffUnreadCount > 99 ? '99+' : totalStaffUnreadCount}
+                        </span>
+                      )}
                     </NavLink>
                   )
                 }
@@ -304,6 +315,25 @@ function DashboardLayout() {
             </div>
 
             <div className="flex items-center gap-3 md:gap-4">
+              {isStaff && (
+                <Link
+                  to="/dashboard/live-chat"
+                  title="Live Chat"
+                  aria-label="Open Live Chat"
+                  className={`relative flex h-9 w-9 items-center justify-center rounded-lg border transition ${
+                    location.pathname === '/dashboard/live-chat'
+                      ? 'border-slate-900 bg-slate-100 text-slate-900'
+                      : 'border-dark/10 bg-white text-dark hover:bg-slate-100'
+                  }`}
+                >
+                  <FiMessageCircle size={17} />
+                  {totalStaffUnreadCount > 0 && (
+                    <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-slate-900 px-1 text-[10px] font-bold text-white">
+                      {totalStaffUnreadCount > 99 ? '99+' : totalStaffUnreadCount}
+                    </span>
+                  )}
+                </Link>
+              )}
               <div
                 className="flex items-center rounded-lg border border-dark/10 bg-white p-0.5"
                 role="group"
@@ -368,6 +398,7 @@ function DashboardLayout() {
           </ErrorBoundary>
         </main>
       </div>
+      {!isStaff && <LiveChatWidget />}
     </div>
   )
 }

@@ -23,6 +23,7 @@ const Register = lazy(() => import('../../pages/auth/Register'))
 const Unauthorized = lazy(() => import('../../pages/public/Unauthorized'))
 const NotFound = lazy(() => import('../../pages/public/NotFound'))
 const Dashboard = lazy(() => import('../../pages/dashboard/common/Dashboard'))
+const LiveChat = lazy(() => import('../../pages/dashboard/common/LiveChat'))
 
 function LegacyMagazineRedirect() {
   const { id } = useParams()
@@ -65,6 +66,14 @@ export const commonDashboardRoutes = (
   <>
     <Route path="/dashboard" element={<Navigate to="/dashboard/overview" replace />} />
     <Route path="/dashboard/overview" element={<Dashboard />} />
+    <Route
+      path="/dashboard/live-chat"
+      element={
+        <ProtectedRoute allowedRoles={['admin', 'moderator', 'employee']}>
+          <LiveChat />
+        </ProtectedRoute>
+      }
+    />
   </>
 )
 

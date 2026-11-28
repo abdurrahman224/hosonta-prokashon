@@ -5,6 +5,7 @@ import {
   FiDollarSign,
   FiFileText,
   FiGrid,
+  FiMessageCircle,
   FiMessageSquare,
   FiPackage,
   FiPhoneCall,
@@ -126,6 +127,12 @@ export const sidebarConfig = {
       permission: PERMISSIONS.MANUSCRIPTS_REVIEW,
     },
     {
+      label: 'Live Chat',
+      path: '/dashboard/live-chat',
+      icon: FiMessageCircle,
+      permission: PERMISSIONS.LIVE_CHAT_ACCESS,
+    },
+    {
       label: 'Messages',
       path: '/dashboard/messages',
       icon: FiMessageSquare,
@@ -169,6 +176,12 @@ export const sidebarConfig = {
       path: '/dashboard/magazine-review',
       icon: FiFileText,
       permission: PERMISSIONS.MAGAZINES_UPDATE,
+    },
+    {
+      label: 'Live Chat',
+      path: '/dashboard/live-chat',
+      icon: FiMessageCircle,
+      permission: PERMISSIONS.LIVE_CHAT_ACCESS,
     },
     {
       label: 'Message Moderation',
@@ -265,6 +278,12 @@ export const sidebarConfig = {
       path: '/dashboard/expense-profiles',
       icon: FiDollarSign,
       permission: PERMISSIONS.EXPENSE_PROFILES_MANAGE,
+    },
+    {
+      label: 'Live Chat',
+      path: '/dashboard/live-chat',
+      icon: FiMessageCircle,
+      permission: PERMISSIONS.LIVE_CHAT_ACCESS,
     },
     {
       label: 'My Profile',
