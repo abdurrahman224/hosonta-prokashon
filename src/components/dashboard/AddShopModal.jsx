@@ -15,7 +15,7 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
     email: '',
     address: '',
     district: 'Dhaka',
-    category: 'Wholesale & Retail Bookshop',
+    category: 'Wholesale',
     defaultCommission: 35,
     tradeLicense: '',
     notes: '',
@@ -40,7 +40,7 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
       defaultCommission: Number(form.defaultCommission) || 30,
     });
 
-    toast.success('New shop registered successfully!');
+    toast.success('Wholesale account added successfully!');
     if (onCreated) onCreated(newShop);
     onClose();
   };
@@ -51,17 +51,15 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-dark/10 px-4 py-3 sm:px-5 sm:py-4">
           <div className="flex min-w-0 items-center gap-2">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/20 text-dark">
-              <FiShoppingBag className="text-lg" />
-            </div>
+            <FiShoppingBag className="text-lg text-slate-700" />
             <h3 className="font-heading text-base font-bold text-dark sm:text-lg">
-              Add New Shop / Bookshop
+              Add Wholesale
             </h3>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-lg p-1.5 text-dark/50 hover:bg-dark/5 transition"
+            className="shrink-0 p-1 text-dark/50 hover:text-dark transition"
             aria-label="Close"
           >
             <FiX size={18} />
@@ -73,7 +71,7 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
           <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
             <div>
               <label className="mb-1 block text-xs font-bold text-dark">
-                Shop Name <span className="text-red-500">*</span>
+                Wholesale Name <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
@@ -223,7 +221,7 @@ export default function AddShopModal({ isOpen, onClose, onCreated }) {
               type="submit"
               className="rounded-lg bg-primary px-5 py-2.5 text-xs font-bold text-dark shadow-2xs hover:bg-primary-hover transition"
             >
-              Save Shop
+              Save Wholesale
             </button>
           </div>
         </form>

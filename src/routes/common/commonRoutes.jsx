@@ -33,9 +33,9 @@ export const publicRoutes = (
   <Route element={<MainLayout />}>
     <Route path="/" element={<Home />} />
     <Route path="/books" element={<Books />} />
-    <Route path="/books/:id" element={<BookDetails />} />
+    <Route path="/books/:slug" element={<BookDetails />} />
     <Route path="/authors" element={<Authors />} />
-    <Route path="/authors/:id" element={<AuthorProfile />} />
+    <Route path="/authors/:slug" element={<AuthorProfile />} />
     <Route path="/categories" element={<Categories />} />
     <Route path="/categories/:name" element={<CategoryProfile />} />
     <Route path="/magazine" element={<Magazine />} />

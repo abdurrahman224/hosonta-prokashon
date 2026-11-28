@@ -1,12 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  FiBookOpen,
-  FiChevronLeft,
-  FiChevronRight,
-  FiSearch,
-} from 'react-icons/fi';
+import { FiBookOpen, FiSearch } from 'react-icons/fi';
 import { useSearchParams } from 'react-router-dom';
 import BookRow from '../../../components/books/BookRow';
+import Pagination, { paginateItems } from '../../../components/common/Pagination';
 import { BookCardSkeleton } from '../../../components/common/Skeleton';
 import FilterSidebar from '../../../components/filters/FilterSidebar';
 import {
@@ -25,6 +21,8 @@ import categories from '../../../data/categories';
 import { useData } from '../../../context/useData';
 import useFormat from '../../../hooks/useFormat';
 import useSearch from '../../../hooks/useSearch';
+import { bookHasCategory, getBookPricing } from '../../../utils/bookHelpers';
+import { getCategoryLabel, getLocalizedValue } from '../../../utils/i18n';
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -149,20 +147,16 @@ function toNumber(value) {
   return Number(englishValue);
 }
 
-// প্রকাশকের নাম string বা { bn } অবজেক্ট — দুটোই চলবে
+// Supports plain string or { en, bn } objects
 function publisherOf(book) {
-  const value = book.publisher;
-  if (!value) return '';
-  if (typeof value === 'object')
-    return value.bn ?? value.name?.bn ?? value.name ?? '';
-  return String(value);
+  return getLocalizedValue(book.publisher);
 }
 
 const publishedBooks = books.filter(book => book.status === 'published');
 
 const priceMax =
   Math.ceil(
-    Math.max(0, ...publishedBooks.map(book => toNumber(book.price) || 0)) / 100,
+    Math.max(0, ...publishedBooks.map(book => getBookPricing(book).sellingPrice || 0)) / 100,
   ) * 100 || 1000;
 
 const availableCategories = [
@@ -175,11 +169,11 @@ const availableCategories = [
       },
     ]),
   ).values(),
-].map(item => ({ id: item.id, label: item.name?.bn || item.name }));
+].map(item => ({ id: item.id, label: getCategoryLabel(item.name) }));
 
 const authorOptions = authors.map(item => ({
   id: String(item.id),
-  label: item.name?.bn || item.name,
+  label: getLocalizedValue(item.name),
 }));
 
 const publisherOptions = [
@@ -219,7 +213,7 @@ function Books() {
       if (
         skip !== 'category' &&
         values.category &&
-        book.categoryId !== values.category
+        !bookHasCategory(book, values.category)
       )
         return false;
       if (
@@ -235,7 +229,7 @@ function Books() {
       )
         return false;
       if (skip !== 'price') {
-        const price = toNumber(book.price);
+        const price = getBookPricing(book).sellingPrice;
         if (price < values.price[0] || price > values.price[1]) return false;
       }
       // রেটিং ফিল্টার বন্ধ:
@@ -250,9 +244,9 @@ function Books() {
 
     return [...filtered].sort((firstBook, secondBook) => {
       if (sort === 'price-low')
-        return toNumber(firstBook.price) - toNumber(secondBook.price);
+        return getBookPricing(firstBook).sellingPrice - getBookPricing(secondBook).sellingPrice;
       if (sort === 'price-high')
-        return toNumber(secondBook.price) - toNumber(firstBook.price);
+        return getBookPricing(secondBook).sellingPrice - getBookPricing(firstBook).sellingPrice;
       if (sort === 'rating-high') {
         return (
           getBookRatingStats(secondBook.id).average -
@@ -290,7 +284,7 @@ function Books() {
       {
         key: 'publisher',
         type: 'options',
-        title: 'প্রকাশক',
+        title: 'Publisher',
         options: withCounts(
           publisherOptions,
           countBy('publisher', publisherOf),
@@ -300,7 +294,7 @@ function Books() {
       {
         key: 'category',
         type: 'options',
-        title: 'বিষয় সমূহ',
+        title: 'Category',
         options: withCounts(
           availableCategories,
           countBy('category', book => book.categoryId),
@@ -310,7 +304,7 @@ function Books() {
       {
         key: 'author',
         type: 'options',
-        title: 'লেখক',
+        title: 'Author',
         options: withCounts(
           authorOptions,
           countBy('author', book => String(book.authorId)),
@@ -336,15 +330,11 @@ function Books() {
 
   const chips = buildActiveChips(sections, values, formatNumber);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredBooks.length / booksPerPage),
-  );
-  const currentPage = Math.min(Math.max(requestedPage, 1), totalPages);
-  const visibleBooks = filteredBooks.slice(
-    (currentPage - 1) * booksPerPage,
-    currentPage * booksPerPage,
-  );
+  const {
+    items: visibleBooks,
+    currentPage,
+    totalPages,
+  } = paginateItems(filteredBooks, requestedPage, booksPerPage);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setIsLoading(false), 280);
@@ -393,7 +383,7 @@ function Books() {
             {/* উপরের সারি: বাম পাশে বইয়ের সংখ্যা, ডান পাশে ফিল্টার বাটন + সর্ট */}
             <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm text-dark-muted">
-                {formatNumber(filteredBooks.length)}টি প্রকাশিত বই
+                {filteredBooks.length} published books
               </p>
 
               <div className="flex justify-center items-center gap-2">
@@ -402,15 +392,15 @@ function Books() {
                   activeCount={chips.length}
                 />
                 <select
-                  aria-label="বই সাজান"
+                  aria-label="Sort books"
                   value={sort}
                   onChange={event => updateParam('sort', event.target.value)}
                   className="min-w-0 rounded-lg border border-dark/10 bg-white px-3 py-1.5 text-sm text-dark focus-visible:outline-none md:px-4"
                 >
-                  <option value="new">নতুন বই আগে</option>
-                  <option value="price-low">দাম: কম থেকে বেশি</option>
-                  <option value="price-high">দাম: বেশি থেকে কম</option>
-                  <option value="rating-high">সর্বোচ্চ রেটিং</option>
+                  <option value="new">Newest First</option>
+                  <option value="price-low">Price: Low to High</option>
+                  <option value="price-high">Price: High to Low</option>
+                  <option value="rating-high">Top Rated</option>
                 </select>
               </div>
             </div>
@@ -431,6 +421,8 @@ function Books() {
               <>
                 <BookRow items={visibleBooks} />
                 <Pagination
+                  variant="minimal"
+                  ariaLabel="Book pages"
                   currentPage={currentPage}
                   totalPages={totalPages}
                   onPageChange={page =>
@@ -450,57 +442,11 @@ function Books() {
         onClose={closeDrawer}
         activeCount={chips.length}
         onReset={reset}
-        resultLabel={`${formatNumber(filteredBooks.length)}টি বই দেখুন`}
+        resultLabel={`View ${filteredBooks.length} books`}
       >
         {panel}
       </FilterDrawer>
     </div>
-  );
-}
-
-function Pagination({ currentPage, totalPages, onPageChange }) {
-  if (totalPages <= 1) {
-    return null;
-  }
-
-  return (
-    <nav
-      className="mt-10 flex flex-wrap items-center justify-center gap-2"
-      aria-label="বইয়ের পৃষ্ঠা"
-    >
-      <button
-        type="button"
-        disabled={currentPage === 1}
-        onClick={() => onPageChange(currentPage - 1)}
-        className="rounded-md border border-dark/10 bg-white p-2 text-dark transition hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
-        aria-label="আগের পৃষ্ঠা"
-      >
-        <FiChevronLeft />
-      </button>
-      {Array.from({ length: totalPages }, (_, index) => index + 1).map(page => (
-        <button
-          type="button"
-          key={page}
-          onClick={() => onPageChange(page)}
-          className={`h-10 w-10 rounded-md font-semibold transition ${
-            page === currentPage
-              ? 'bg-primary text-dark'
-              : 'border border-dark/10 bg-white text-dark hover:border-primary'
-          }`}
-        >
-          {page}
-        </button>
-      ))}
-      <button
-        type="button"
-        disabled={currentPage === totalPages}
-        onClick={() => onPageChange(currentPage + 1)}
-        className="rounded-md border border-dark/10 bg-white p-2 text-dark transition hover:border-primary disabled:cursor-not-allowed disabled:opacity-40"
-        aria-label="পরের পৃষ্ঠা"
-      >
-        <FiChevronRight />
-      </button>
-    </nav>
   );
 }
 
@@ -509,7 +455,7 @@ function EmptyState({ onReset }) {
     <div className="mx-auto mt-8 max-w-lg rounded-xl border border-dashed border-dark/20 bg-white px-6 py-16 text-center">
       <FiBookOpen className="mx-auto text-4xl text-primary-hover" />
       <h2 className="mt-5 font-heading text-2xl font-bold text-dark">
-        কোনো বই পাওয়া যায়নি
+        No books found
       </h2>
       <p className="mt-3 leading-7 text-dark-muted">
         আপনার সার্চ বা ফিল্টার পরিবর্তন করে আবার চেষ্টা করুন।

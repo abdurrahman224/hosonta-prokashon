@@ -16,7 +16,7 @@ import { useAuth } from '../../../context/useAuth';
   - images: আপলোড করা ছবির লিংকগুলো এখানে দিন (এক বা একাধিক)
   - to: টাইটেল ক্লিক করলে যেখানে যাবে (না দিলে সাধারণ লেখা হিসেবে দেখাবে)
   উদাহরণ:
-  { id: 1, title: 'আপনার স্বামীকে আগলে রাখুন', to: '/books/1', images: ['/uploads/a.jpg', '/uploads/b.jpg'] }
+  { id: 1, title: 'আপনার স্বামীকে আগলে রাখুন', to: '/books/apnar-shamike-agle-rakhun', images: ['/uploads/a.jpg', '/uploads/b.jpg'] }
 */
 const publishingItems = [
   {

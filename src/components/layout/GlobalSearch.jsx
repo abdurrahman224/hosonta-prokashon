@@ -7,6 +7,7 @@ import magazines from '../../data/magazines'
 import books from '../../data/books'
 import useSearch from '../../hooks/useSearch'
 import useFormat from '../../hooks/useFormat'
+import { getBookPricing } from '../../utils/bookHelpers'
 
 function GlobalSearch() {
   const [isOpen, setIsOpen] = useState(false)
@@ -100,7 +101,7 @@ function GlobalSearch() {
                       return {
                         id: book.id,
                         title: bookTitle,
-                        subtitle: `লেখক: ${book.author?.bn || book.author} • ${formatCurrency(book.offerPrice || book.price)}`,
+                        subtitle: `লেখক: ${book.author?.bn || book.author} • ${formatCurrency(getBookPricing(book).sellingPrice)}`,
                         to: `/books?q=${encodeURIComponent(bookTitle)}`,
                       }
                     })}

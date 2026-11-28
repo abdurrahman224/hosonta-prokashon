@@ -1,5 +1,5 @@
 function FilterSidebar({
-  title = 'ফিল্টার',
+  title = 'Filters',
   activeCount = 0,
   onReset,
   children,
@@ -15,7 +15,7 @@ function FilterSidebar({
               onClick={onReset}
               className="text-sm font-semibold text-primary-hover transition hover:text-dark"
             >
-              সব মুছুন
+              Clear all
             </button>
           )}
         </div>

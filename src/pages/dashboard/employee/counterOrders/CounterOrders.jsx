@@ -3,7 +3,7 @@ import { FiCalendar, FiEye, FiPlus, FiPrinter, FiShoppingBag, FiX } from 'react-
 import { Link } from 'react-router-dom';
 import DataTable from '../../../../components/dashboard/DataTable';
 import { useData } from '../../../../context/useData';
-import { formatCurrency } from '../../../../utils/format';
+import { formatCurrency, toEnglishDigits } from '../../../../utils/format';
 import CashMemoModal from './CashMemoModal';
 import { initialCounterOrders } from './dummyData';
 import OrderDetailsModal from './OrderDetailsModal';
@@ -195,7 +195,7 @@ export default function CounterOrders() {
     () => [
       {
         key: 'shopName',
-        header: 'Shop Name',
+        header: 'Wholesale Name',
         sortable: true,
         sortValue: order => order.shopName || order.customerName,
         render: order => (
@@ -216,14 +216,18 @@ export default function CounterOrders() {
         header: 'Order ID',
         sortable: true,
         render: order => (
-          <span className="font-medium text-slate-600">{order.id}</span>
+          <span className="whitespace-nowrap font-medium text-slate-600">
+            {order.id}
+          </span>
         ),
       },
       {
         key: 'phone',
         header: 'Phone',
         render: order => (
-          <span className="text-slate-600 font-normal">{order.phone}</span>
+          <span className="whitespace-nowrap font-normal text-slate-600">
+            {toEnglishDigits(order.phone) || '—'}
+          </span>
         ),
       },
       {
@@ -233,36 +237,22 @@ export default function CounterOrders() {
         sortable: true,
         sortValue: order => Number(order.commission || 0),
         render: order => {
-          const subtotal = Number(order.subtotal || order.total || 0);
-          const total = Number(order.total || 0);
           const commissionPct = Number(order.commission || 0);
-          const commissionDeduction =
-            order.commissionAmount !== undefined
-              ? order.commissionAmount
-              : Math.max(0, subtotal - total);
-
           return (
-            <div>
-              <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
-                {commissionPct}%
-              </span>
-              {commissionDeduction > 0 && (
-                <span className="block text-[11px] text-rose-500 mt-0.5">
-                  - ৳{commissionDeduction}
-                </span>
-              )}
-            </div>
+            <span className="inline-block whitespace-nowrap rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+              {commissionPct}%
+            </span>
           );
         },
       },
       {
         key: 'total',
         header: 'Total Amount',
-        align: 'right',
+        align: 'center',
         sortable: true,
         sortValue: order => Number(order.total || 0),
         render: order => (
-          <span className="font-semibold text-slate-900 text-sm">
+          <span className="whitespace-nowrap font-semibold text-slate-900 text-sm">
             {formatCurrency(Number(order.total || 0))}
           </span>
         ),
@@ -294,18 +284,18 @@ export default function CounterOrders() {
         header: 'Actions',
         align: 'center',
         render: order => (
-          <div className="flex items-center justify-center gap-1.5">
+          <div className="flex items-center justify-center gap-2">
             <button
               type="button"
               onClick={e => {
                 e.stopPropagation();
                 setSelectedDetailsOrder(order);
               }}
-              className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200 transition"
+              className="p-1 text-slate-500 hover:text-dark transition"
               title="View details"
+              aria-label="View details"
             >
-              <FiEye size={13} />
-              <span>Details</span>
+              <FiEye size={16} />
             </button>
 
             <button
@@ -314,10 +304,11 @@ export default function CounterOrders() {
                 e.stopPropagation();
                 setSelectedInvoiceOrder(order);
               }}
-              className="rounded-lg p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+              className="p-1 text-slate-600 hover:text-dark transition"
               title="Print memo"
+              aria-label="Print memo"
             >
-              <FiPrinter size={13} />
+              <FiPrinter size={15} />
             </button>
           </div>
         ),
@@ -340,14 +331,13 @@ export default function CounterOrders() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* দোকান এড করো বাটন */}
           <button
             type="button"
             onClick={() => setIsAddShopOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-dark/15 bg-white px-3.5 py-2 text-xs font-bold text-dark transition hover:bg-cream hover:border-dark/30 shadow-xs"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-bold text-dark transition hover:border-slate-300"
           >
-            <FiShoppingBag size={15} className="text-primary" />
-            <span>দোকান এড করুন</span>
+            <FiShoppingBag size={15} className="text-slate-700" />
+            <span>Add Wholesale</span>
           </button>
 
           <Link
@@ -371,7 +361,7 @@ export default function CounterOrders() {
               : 'border-transparent text-dark/60 hover:text-dark'
           }`}
         >
-          <FiCalendar size={14} /> কাউন্টার সেলস চালান
+          <FiCalendar size={14} /> Counter Sales Invoices
         </button>
         <button
           type="button"
@@ -382,7 +372,7 @@ export default function CounterOrders() {
               : 'border-transparent text-dark/60 hover:text-dark'
           }`}
         >
-          <FiShoppingBag size={14} /> দোকান ও গ্রাহক প্রোফাইল
+          <FiShoppingBag size={14} /> Wholesale Profiles
         </button>
       </div>
 

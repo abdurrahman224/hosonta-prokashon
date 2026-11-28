@@ -11,20 +11,17 @@ import {
 import toast from 'react-hot-toast';
 import StatusBadge from '../../../components/dashboard/StatusBadge';
 import { useAuth } from '../../../context/useAuth';
+import {
+  MAGAZINE_CATEGORIES,
+  getLocalizedValue,
+  getMagazineCategoryLabel,
+} from '../../../utils/i18n';
 import { PERMISSIONS } from '../../../utils/roles';
 import {
   getStoredMagazines,
   saveStoredMagazines,
 } from '../../../utils/moderationStorage';
 
-const categories = [
-  'সাহিত্য',
-  'পাঠাভ্যাস',
-  'লেখালেখি',
-  'প্রকাশনা',
-  'শিশু-কিশোর',
-  'অন্যান্য',
-];
 const defaultImage =
   'https://images.unsplash.com/photo-1495446815901-a7297e633e8d?auto=format&fit=crop&w=900&q=80';
 const emptyForm = {
@@ -37,13 +34,11 @@ const emptyForm = {
 const MAX_FILE_MB = 10;
 const MAX_DIMENSION = 1200;
 
-const toBn = value => Number(value).toLocaleString('bn-BD');
-
 const formatDate = value => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('bn-BD', {
-    day: 'numeric',
+  return date.toLocaleDateString('en-GB', {
+    day: '2-digit',
     month: 'short',
     year: 'numeric',
   });
@@ -117,11 +112,11 @@ function MagazineSubmit() {
     event.target.value = '';
     if (!file) return;
     if (!file.type.startsWith('image/')) {
-      toast.error('শুধু ছবি আপলোড করা যাবে।');
+      toast.error('Only image files are supported.');
       return;
     }
     if (file.size > MAX_FILE_MB * 1024 * 1024) {
-      toast.error(`ছবির সাইজ সর্বোচ্চ ${toBn(MAX_FILE_MB)} MB হতে পারবে।`);
+      toast.error(`Image size must be under ${MAX_FILE_MB} MB.`);
       return;
     }
     setProcessingImage(true);
@@ -129,7 +124,7 @@ function MagazineSubmit() {
       const dataUrl = await compressImage(file);
       update('image', dataUrl);
     } catch {
-      toast.error('ছবিটি পড়া যায়নি। JPG বা PNG ছবি দিয়ে আবার চেষ্টা করুন।');
+      toast.error('Failed to read image. Please try JPG or PNG.');
     } finally {
       setProcessingImage(false);
     }
@@ -140,12 +135,12 @@ function MagazineSubmit() {
     if (!can(PERMISSIONS.MAGAZINES_CREATE) || processingImage) return;
     const nextErrors = {};
     if (form.title.trim().length < 5)
-      nextErrors.title = 'শিরোনাম অন্তত ৫ অক্ষরের হতে হবে।';
-    if (!form.category) nextErrors.category = 'একটি বিভাগ নির্বাচন করুন।';
+      nextErrors.title = 'Title must be at least 5 characters.';
+    if (!form.category) nextErrors.category = 'Please select a category.';
     if (form.excerpt.trim().length < 20)
-      nextErrors.excerpt = 'সংক্ষিপ্তসার অন্তত ২০ অক্ষরের হতে হবে।';
+      nextErrors.excerpt = 'Summary must be at least 20 characters.';
     if (form.content.trim().length < 80)
-      nextErrors.content = 'লেখাটি অন্তত ৮০ অক্ষরের হতে হবে।';
+      nextErrors.content = 'Content must be at least 80 characters.';
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
       return;
@@ -167,17 +162,15 @@ function MagazineSubmit() {
     try {
       saveStoredMagazines(nextMagazines);
     } catch {
-      toast.error(
-        'সংরক্ষণের জায়গা শেষ। ছোট ছবি ব্যবহার করুন বা পুরনো লেখা মুছুন।',
-      );
+      toast.error('Storage is full. Use a smaller image or remove older items.');
       return;
     }
     setMagazines(nextMagazines);
     closeForm();
-    toast.success('আপনার Magazine অনুমোদনের জন্য জমা হয়েছে।');
+    toast.success('Magazine submitted for review.');
   };
 
-  /* ───────────── ফর্ম ───────────── */
+  /* ───────────── Form ───────────── */
   if (view === 'form') {
     return (
       <>
@@ -186,12 +179,12 @@ function MagazineSubmit() {
           onClick={closeForm}
           className="mb-3 inline-flex items-center gap-1.5 text-xs font-semibold text-dark-muted transition hover:text-dark sm:mb-4 sm:gap-2 sm:text-sm"
         >
-          <FiArrowLeft /> তালিকায় ফিরে যান
+          <FiArrowLeft /> Back to list
         </button>
         <div className="mb-4 sm:mb-6">
           <Header
-            title="নতুন Magazine"
-            description="লেখাটি জমা দিলে অনুমোদনের পর সবার জন্য প্রকাশিত হবে।"
+            title="New Magazine"
+            description="Submit an article for editorial approval."
           />
         </div>
 
@@ -200,18 +193,18 @@ function MagazineSubmit() {
           noValidate
           className="grid items-start gap-3 sm:gap-5 lg:grid-cols-[minmax(0,1fr)_340px]"
         >
-          {/* বাম: লেখার অংশ */}
-          <section className="rounded-md    shadow-sm sm:rounded-2xl sm:p-4">
+          {/* Left: Article fields */}
+          <section className="rounded-xl border border-slate-200 bg-white p-4 sm:rounded-2xl sm:p-5">
             <h2 className="mb-3 font-heading text-sm font-bold text-dark sm:mb-5 sm:text-lg">
-              লেখার বিবরণ
+              Article Details
             </h2>
             <div className="space-y-2.5 sm:space-y-3.5">
               <Field
-                label="শিরোনাম"
+                label="Title"
                 value={form.title}
                 error={errors.title}
                 onChange={v => update('title', v)}
-                placeholder="Magazine-এর শিরোনাম লিখুন"
+                placeholder="Enter magazine title"
               />
               <SelectField
                 value={form.category}
@@ -219,21 +212,21 @@ function MagazineSubmit() {
                 onChange={v => update('category', v)}
               />
               <Field
-                label="সংক্ষিপ্তসার"
+                label="Summary / Excerpt"
                 value={form.excerpt}
                 error={errors.excerpt}
                 onChange={v => update('excerpt', v)}
-                placeholder="পাঠক কী জানতে পারবেন, ১-২ লাইনে লিখুন"
+                placeholder="Write a 1-2 line summary for readers"
                 textarea
                 rows={2}
                 min={20}
               />
               <Field
-                label="মূল লেখা"
+                label="Article Content"
                 value={form.content}
                 error={errors.content}
                 onChange={v => update('content', v)}
-                placeholder="প্রতিটি অনুচ্ছেদ নতুন লাইনে লিখুন"
+                placeholder="Write each paragraph on a new line"
                 textarea
                 rows={5}
                 min={80}
@@ -241,14 +234,14 @@ function MagazineSubmit() {
             </div>
           </section>
 
-          {/* ডান: কভার ছবি + জমা */}
+          {/* Right: Cover & Submit */}
           <aside className="space-y-3 sm:space-y-5 lg:sticky lg:top-6">
             <section className="rounded-xl border border-dark/10 bg-white p-4 shadow-sm sm:rounded-2xl sm:p-5">
               <h2 className="font-heading text-sm font-bold text-dark sm:text-lg">
-                কভার ছবি
+                Cover Image
               </h2>
               <p className="mb-3 mt-0.5 text-xs text-dark-muted sm:mb-4 sm:text-sm">
-                ঐচ্ছিক। না দিলে ডিফল্ট ছবি ব্যবহার হবে।
+                Optional. A default cover will be used if left empty.
               </p>
 
               <input
@@ -265,7 +258,7 @@ function MagazineSubmit() {
                   <div className="aspect-[16/9] overflow-hidden rounded-lg border border-dark/10 bg-cream sm:rounded-xl">
                     <img
                       src={form.image}
-                      alt="কভার ছবির প্রিভিউ"
+                      alt="Cover preview"
                       className="h-full w-full object-cover"
                     />
                   </div>
@@ -275,14 +268,14 @@ function MagazineSubmit() {
                       onClick={() => fileInputRef.current?.click()}
                       className="inline-flex items-center justify-center gap-1.5 rounded-md border border-dark/15 px-3 py-2 text-xs font-semibold text-dark transition hover:bg-cream sm:text-sm"
                     >
-                      <FiRefreshCw /> বদলান
+                      <FiRefreshCw /> Replace
                     </button>
                     <button
                       type="button"
                       onClick={() => update('image', '')}
                       className="inline-flex items-center justify-center gap-1.5 rounded-md border border-red-200 px-3 py-2 text-xs font-semibold text-red-600 transition hover:bg-red-50 sm:text-sm"
                     >
-                      <FiTrash2 /> সরান
+                      <FiTrash2 /> Remove
                     </button>
                   </div>
                 </div>
@@ -295,7 +288,7 @@ function MagazineSubmit() {
                 >
                   {processingImage ? (
                     <span className="text-xs font-semibold text-dark sm:text-sm">
-                      ছবি প্রস্তুত হচ্ছে...
+                      Processing image...
                     </span>
                   ) : (
                     <>
@@ -303,10 +296,10 @@ function MagazineSubmit() {
                         <FiUploadCloud />
                       </span>
                       <span className="text-xs font-semibold text-dark sm:text-sm">
-                        ছবি আপলোড করুন
+                        Upload Cover Image
                       </span>
                       <span className="text-[11px] text-dark-muted sm:text-xs">
-                        গ্যালারি বা ক্যামেরা • সর্বোচ্চ {toBn(MAX_FILE_MB)} MB
+                        JPG or PNG up to {MAX_FILE_MB} MB
                       </span>
                     </>
                   )}
@@ -320,14 +313,14 @@ function MagazineSubmit() {
                 disabled={processingImage}
                 className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-dark transition hover:bg-primary-hover disabled:opacity-60 sm:gap-2 sm:rounded-lg sm:py-3.5 sm:text-base"
               >
-                <FiSend /> জমা দিন
+                <FiSend /> Submit
               </button>
               <button
                 type="button"
                 onClick={closeForm}
                 className="w-full rounded-md border border-dark/15 px-4 py-2.5 text-sm font-semibold text-dark transition hover:bg-cream sm:rounded-lg sm:py-3 sm:text-base"
               >
-                বাতিল করুন
+                Cancel
               </button>
             </div>
           </aside>
@@ -336,20 +329,20 @@ function MagazineSubmit() {
     );
   }
 
-  /* ───────────── তালিকা ───────────── */
+  /* ───────────── List ───────────── */
   return (
     <>
       <div className="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <Header
-          title="আমার Magazine"
-          description="আপনার জমা দেওয়া লেখা ও তাদের অবস্থা এখানে দেখুন।"
+          title="My Magazines"
+          description="Track your submitted magazine articles and review status."
         />
         <button
           type="button"
           onClick={() => setView('form')}
-          className="inline-flex w-full shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary px-2.5 py-2 text-sm font-semibold text-dark shadow-sm transition hover:bg-primary-hover sm:w-auto sm:gap-2 sm:rounded-lg sm:px-2 sm:py-2 sm:text-base"
+          className="inline-flex w-full shrink-0 items-center justify-center gap-1.5 rounded-md bg-primary px-2.5 py-2 text-sm font-semibold text-dark shadow-sm transition hover:bg-primary-hover sm:w-auto sm:gap-2 sm:rounded-lg sm:px-3.5 sm:py-2"
         >
-          <FiPlus /> Magazine যোগ করুন
+          <FiPlus /> Add Magazine
         </button>
       </div>
 
@@ -357,16 +350,15 @@ function MagazineSubmit() {
         <section className="overflow-hidden rounded-xl border border-dark/10 bg-white shadow-sm sm:rounded-2xl">
           <div className="border-b border-dark/10 px-3 py-2.5 sm:px-5 sm:py-3">
             <p className="text-xs font-semibold text-dark sm:text-sm">
-              মোট {toBn(ownMagazines.length)}টি লেখা
+              Total {ownMagazines.length} article{ownMagazines.length === 1 ? '' : 's'}
             </p>
           </div>
 
-          {/* ডেস্কটপ কলাম হেডার */}
           <div className="hidden grid-cols-[minmax(0,1fr)_140px_130px_130px] gap-4 border-b border-dark/10 bg-cream/60 px-5 py-2.5 text-xs font-semibold text-dark-muted md:grid">
-            <span>লেখা</span>
-            <span>বিভাগ</span>
-            <span>তারিখ</span>
-            <span>অবস্থা</span>
+            <span>Article</span>
+            <span>Category</span>
+            <span>Date</span>
+            <span>Status</span>
           </div>
 
           <ul className="divide-y divide-dark/10">
@@ -388,27 +380,25 @@ function MagazineSubmit() {
                     )}
                     <div className="min-w-0 flex-1">
                       <h3 className="line-clamp-2 font-heading text-sm font-bold leading-snug text-dark sm:text-base">
-                        {magazine.title}
+                        {getLocalizedValue(magazine.title)}
                       </h3>
                       <p className="mt-0.5 line-clamp-1 text-xs text-dark-muted sm:mt-1 sm:text-sm">
-                        {magazine.excerpt}
+                        {getLocalizedValue(magazine.excerpt)}
                       </p>
                     </div>
                   </div>
 
-                  {/* মোবাইল মেটা */}
                   <div className="mt-2 flex items-center justify-between gap-2 md:hidden">
                     <span className="min-w-0 truncate text-[11px] text-dark-muted">
-                      {magazine.category} • {formatDate(magazine.date)}
+                      {getMagazineCategoryLabel(magazine.category)} · {formatDate(magazine.date)}
                     </span>
                     <span className="shrink-0 origin-right scale-90">
                       <StatusBadge status={magazine.status} />
                     </span>
                   </div>
 
-                  {/* ডেস্কটপ কলাম */}
                   <span className="hidden text-sm text-dark md:block">
-                    {magazine.category}
+                    {getMagazineCategoryLabel(magazine.category)}
                   </span>
                   <span className="hidden text-sm text-dark-muted md:block">
                     {formatDate(magazine.date)}
@@ -433,17 +423,17 @@ function MagazineSubmit() {
             <FiImage />
           </span>
           <p className="mt-3 text-sm font-semibold text-dark sm:mt-4 sm:text-base">
-            এখনও কোনো Magazine জমা দেননি
+            No magazines submitted yet
           </p>
           <p className="mt-0.5 text-xs text-dark-muted sm:mt-1 sm:text-sm">
-            আপনার প্রথম লেখাটি জমা দিয়ে শুরু করুন।
+            Submit your first article to get started.
           </p>
           <button
             type="button"
             onClick={() => setView('form')}
             className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2.5 text-sm font-semibold text-dark transition hover:bg-primary-hover sm:mt-5 sm:gap-2 sm:rounded-lg sm:px-5 sm:py-3 sm:text-base"
           >
-            <FiPlus /> Magazine যোগ করুন
+            <FiPlus /> Add Magazine
           </button>
         </div>
       )}
@@ -451,7 +441,6 @@ function MagazineSubmit() {
   );
 }
 
-// মোবাইলে ইনপুটের ফন্ট ১৬px রাখা হয়েছে, নইলে iPhone-এ ফোকাস করলে পেজ অটো-জুম হয়
 const inputClass = error =>
   `magazine-field w-full rounded-md border bg-white px-3 py-2 text-base text-dark outline-none transition placeholder:text-dark-muted/60 sm:rounded-lg sm:px-4 sm:py-3 ${error ? 'magazine-field-error border-red-500' : 'border-dark/15'}`;
 
@@ -472,7 +461,7 @@ function Field({
         {label}
         {min && (
           <span className="text-[11px] font-normal text-dark-muted sm:text-xs">
-            {toBn(value.trim().length)} / ন্যূনতম {toBn(min)}
+            {value.trim().length} / min {min}
           </span>
         )}
       </span>
@@ -497,17 +486,17 @@ function SelectField({ value, error, onChange }) {
   return (
     <label className="block">
       <span className="mb-1.5 block text-xs font-semibold text-dark sm:mb-2 sm:text-sm">
-        বিভাগ
+        Category
       </span>
       <select
         value={value}
         onChange={event => onChange(event.target.value)}
         className={inputClass(error)}
       >
-        <option value="">বিভাগ নির্বাচন করুন</option>
-        {categories.map(category => (
-          <option key={category} value={category}>
-            {category}
+        <option value="">Select category</option>
+        {MAGAZINE_CATEGORIES.map(category => (
+          <option key={category.id} value={category.en}>
+            {category.en}
           </option>
         ))}
       </select>

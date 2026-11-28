@@ -7,9 +7,12 @@ import {
   FiGrid,
   FiMessageSquare,
   FiPackage,
+  FiPhoneCall,
   FiSettings,
   FiShoppingBag,
   FiTrendingDown,
+  FiUser,
+  FiUserCheck,
   FiUsers,
 } from 'react-icons/fi';
 import { PERMISSIONS, ROLES } from '../../utils/roles';
@@ -43,16 +46,28 @@ export const sidebarConfig = {
           permission: PERMISSIONS.MANAGE_USERS,
         },
         {
-          label: 'Shop',
+          label: 'Wholesale',
           path: '/dashboard/all-users/shops',
           icon: FiShoppingBag,
           permission: PERMISSIONS.MANAGE_USERS,
         },
         {
-          label: 'Roles',
-          path: '/dashboard/all-users/roles',
-          icon: FiSettings,
+          label: 'Employee',
+          path: '/dashboard/all-users/employees',
+          icon: FiUserCheck,
           permission: PERMISSIONS.MANAGE_ROLES,
+        },
+        {
+          label: 'Expense Profiles',
+          path: '/dashboard/all-users/expense-profiles',
+          icon: FiDollarSign,
+          permission: PERMISSIONS.EXPENSE_PROFILES_MANAGE,
+        },
+        {
+          label: 'User Follow-Ups',
+          path: '/dashboard/follow-ups',
+          icon: FiPhoneCall,
+          permission: PERMISSIONS.MANAGE_USERS,
         },
       ],
     },
@@ -167,6 +182,12 @@ export const sidebarConfig = {
       icon: FiUsers,
       permission: PERMISSIONS.AUTHORS_READ,
     },
+    {
+      label: 'User Follow-Ups',
+      path: '/dashboard/follow-ups',
+      icon: FiPhoneCall,
+      permission: PERMISSIONS.FOLLOWUPS_MANAGE,
+    },
   ],
   [ROLES.AUTHOR]: [
     commonOverview,
@@ -238,6 +259,18 @@ export const sidebarConfig = {
       path: '/dashboard/publishers',
       icon: FiBookmark,
       permission: PERMISSIONS.BOOKS_READ,
+    },
+    {
+      label: 'Expense Profiles',
+      path: '/dashboard/expense-profiles',
+      icon: FiDollarSign,
+      permission: PERMISSIONS.EXPENSE_PROFILES_MANAGE,
+    },
+    {
+      label: 'My Profile',
+      path: '/dashboard/employee-profile',
+      icon: FiUser,
+      permission: PERMISSIONS.OWN_PROFILE_MANAGE,
     },
   ],
   [ROLES.USER]: [

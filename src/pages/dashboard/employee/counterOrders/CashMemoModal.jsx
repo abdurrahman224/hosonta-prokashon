@@ -58,7 +58,7 @@ export default function CashMemoModal({ order, onClose }) {
 
           <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
             <div>
-              <p><strong>Shop:</strong> {order.shopName || order.customerName}</p>
+              <p><strong>Wholesale:</strong> {order.shopName || order.customerName}</p>
               {order.representative && <p><strong>Representative:</strong> {order.representative}</p>}
               <p><strong>Phone:</strong> {order.phone}</p>
               <p><strong>Address:</strong> {order.address || 'Showroom Counter'}</p>

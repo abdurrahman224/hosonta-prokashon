@@ -1,15 +1,31 @@
+import { useEffect } from 'react';
 import {
   FiArrowLeft,
   FiUsers,
 } from 'react-icons/fi';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import authors from '../../data/authors';
 import books from '../../data/books';
 import AuthorProfileContent from './Authors/AuthorProfileContent';
+import { findAuthorBySlugOrId, getAuthorPath } from '../../utils/authorSlug';
 
 function AuthorProfile() {
-  const { id } = useParams();
-  const author = authors.find(item => String(item.id) === id);
+  const { slug } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const author = findAuthorBySlugOrId(slug, authors);
+  const canonicalPath = author ? getAuthorPath(author, authors) : '';
+
+  useEffect(() => {
+    if (
+      author &&
+      slug &&
+      String(author.id) === slug &&
+      canonicalPath !== `/authors/${slug}`
+    ) {
+      navigate(`${canonicalPath}${location.hash || ''}`, { replace: true });
+    }
+  }, [author, slug, canonicalPath, location.hash, navigate]);
 
   if (!author) return <AuthorNotFound />;
 

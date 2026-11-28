@@ -5,8 +5,9 @@ const books = [
     authorId: '1',
     author: 'আবু সালেহ সাদী',
     price: '২৫০',
-    offerPrice: '১৮২',
+    offerPrice: '১৮৮',
     category: 'বিয়ে ও সংসার',
+    categories: ['বিয়ে ও সংসার', 'আত্মশুদ্ধি ও অনুপ্রেরণা'],
     publishedYear: 2026,
     status: 'published',
     stock: 20,
@@ -26,8 +27,9 @@ const books = [
     authorId: '2',
     author: 'আব্দুর রহমান আল আনসারী',
     price: '৩৬০',
-    offerPrice: '২৬২',
+    offerPrice: '২৭০',
     category: 'বিয়ে ও সংসার',
+    categories: ['বিয়ে ও সংসার', 'ইবাদাত, আমল ও আমলের সহায়িকা'],
     publishedYear: 2026,
     status: 'published',
     stock: 15,
@@ -47,8 +49,9 @@ const books = [
     authorId: '3',
     author: "মনজুর সা'দ",
     price: '১৭৫',
-    offerPrice: '১২৭',
+    offerPrice: '১৩১',
     category: 'সমকালীন উপন্যাস',
+    categories: ['সমকালীন উপন্যাস', 'সাহিত্য ও প্রবন্ধ'],
     publishedYear: 2026,
     status: 'published',
     stock: 18,
@@ -1737,11 +1740,22 @@ const toCategoryId = value =>
 
 export const rawBooks = books
 
-const formattedBooks = books.map(book => ({
-  ...book,
-  categoryId: toCategoryId(book.category),
-  price: toEnglishNumber(book.price),
-  offerPrice: toEnglishNumber(book.offerPrice),
-}))
+const formattedBooks = books.map(book => {
+  const numericPrice = Number(toEnglishNumber(book.price)) || 0
+  const discountedPrice = Math.round(numericPrice * 0.75)
+  const categoryList = Array.isArray(book.categories) && book.categories.length > 0
+    ? book.categories
+    : [book.category].filter(Boolean)
+
+  return {
+    ...book,
+    category: categoryList[0] || book.category,
+    categories: categoryList,
+    categoryId: toCategoryId(categoryList[0] || book.category),
+    price: toEnglishNumber(book.price),
+    offerPrice: String(discountedPrice),
+    discount: 25,
+  }
+})
 
 export default formattedBooks

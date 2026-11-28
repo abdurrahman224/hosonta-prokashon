@@ -17,6 +17,8 @@ import { useCart } from '../../context/useCart';
 import { useFormat } from '../../hooks/useFormat';
 import { useData } from '../../context/useData';
 import useSearch from '../../hooks/useSearch';
+import { getBookPath } from '../../utils/bookSlug';
+import { getBookPricing } from '../../utils/bookHelpers';
 
 const navigation = [
   { key: 'home', to: '/', label: 'হোম' },
@@ -290,7 +292,7 @@ function Navbar() {
                 return (
                   <Link
                     key={book.id}
-                    to={`/books/${book.id}`}
+                    to={getBookPath(book)}
                     onClick={() => {
                       setMobileQuery('');
                       setIsMobileSuggestionsOpen(false);
@@ -310,7 +312,7 @@ function Navbar() {
                         লেখক: {author}
                       </p>
                       <p className="mt-1 font-heading text-sm font-bold text-primary-hover">
-                        {formatCurrency(book.offerPrice || book.price)}
+                        {formatCurrency(getBookPricing(book).sellingPrice)}
                       </p>
                     </div>
                   </Link>
@@ -487,7 +489,7 @@ function MiniCart({
                 className="group relative flex gap-3.5 rounded-xl border border-slate-100 bg-slate-50/40 p-3 transition-all hover:border-slate-200 hover:bg-slate-50 shadow-2xs"
               >
                 <Link
-                  to={`/books/${item.book.id}`}
+                  to={getBookPath(item.book)}
                   onClick={onClose}
                   className="shrink-0 overflow-hidden rounded-lg self-start"
                 >
@@ -503,7 +505,7 @@ function MiniCart({
                 <div className="flex min-w-0 flex-1 flex-col justify-between">
                   <div>
                     <Link
-                      to={`/books/${item.book.id}`}
+                      to={getBookPath(item.book)}
                       onClick={onClose}
                       className="line-clamp-1 font-heading text-sm font-semibold text-slate-800 transition-colors hover:text-primary-hover"
                     >
@@ -513,7 +515,7 @@ function MiniCart({
                       {item.book.author?.bn || item.book.author || 'লেখক'}
                     </p>
                     <p className="mt-1 text-xs font-bold text-slate-900">
-                      {formatCurrency(item.book.offerPrice || item.book.price)}
+                      {formatCurrency(getBookPricing(item.book).sellingPrice)}
                     </p>
                   </div>
                   <div className="mt-2.5 flex items-center justify-between">

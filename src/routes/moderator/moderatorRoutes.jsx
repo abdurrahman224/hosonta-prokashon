@@ -8,6 +8,7 @@ const ReviewQueue = lazy(() => import('../../pages/dashboard/moderator/ReviewQue
 const ReviewModeration = lazy(() => import('../../pages/dashboard/moderator/ReviewModeration'))
 const MagazineReview = lazy(() => import('../../pages/dashboard/moderator/MagazineReview'))
 const MessageModeration = lazy(() => import('../../pages/dashboard/moderator/MessageModeration'))
+const UserFollowUps = lazy(() => import('../../pages/dashboard/moderator/UserFollowUps'))
 
 export const moderatorRoutes = (
   <>
@@ -72,6 +73,14 @@ export const moderatorRoutes = (
       element={
         <ProtectedRoute allowedRoles={['admin', 'moderator']}>
           <MessageModeration />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/dashboard/follow-ups"
+      element={
+        <ProtectedRoute allowedRoles={['admin', 'moderator', 'employee']}>
+          <UserFollowUps />
         </ProtectedRoute>
       }
     />

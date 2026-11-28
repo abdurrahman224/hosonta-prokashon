@@ -23,6 +23,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useData } from '../../../context/useData';
 import ConfirmModal from '../../../components/dashboard/ConfirmModal';
+import { getBookPath } from '../../../utils/bookSlug';
 import StatusBadge from '../../../components/dashboard/StatusBadge';
 
 const formatTaka = (value) =>
@@ -82,7 +83,7 @@ export default function BookDetailsDashboard() {
   };
 
   const handleCopyLink = () => {
-    const url = `${window.location.origin}/books/${book?.id}`;
+    const url = `${window.location.origin}${getBookPath(book)}`;
     navigator.clipboard.writeText(url);
     toast.success('Public book link copied to clipboard');
   };
@@ -176,7 +177,7 @@ export default function BookDetailsDashboard() {
           </button>
 
           <Link
-            to={`/books/${book.id}`}
+            to={getBookPath(book)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50 focus-visible:outline-none"

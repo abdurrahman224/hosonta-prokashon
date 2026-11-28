@@ -81,7 +81,11 @@ export const dashboardTranslations = [
   ['New Counter Order', 'নতুন কাউন্টার অর্ডার'],
   ['Counter Sales History & Cash Memo', 'কাউন্টার সেলস হিস্ট্রি ও ক্যাশ মেমো'],
   ['Invoice & Memo History', 'চালান ও মেমো হিস্ট্রি'],
-  ['Shop Name', 'দোকানের নাম'],
+  ['Shop Name', 'পাইকারির নাম'],
+  ['Wholesale Name', 'পাইকারির নাম'],
+  ['Wholesale', 'পাইকারি'],
+  ['Expense Profiles', 'খরচ প্রোফাইল'],
+  ['User Follow-Ups', 'ইউজার ফলোআপ'],
   ['Phone Number', 'মোবাইল নম্বর'],
   ['Representative / Owner Name', 'প্রতিনিধি / মালিকের নাম'],
   ['Address', 'ঠিকানা'],
@@ -137,11 +141,6 @@ export const dashboardTranslations = [
   ['Reference / Reason', 'রেফারেন্স / কারণ'],
   ['Qty', 'পরিমাণ'],
   ['Stock Change', 'স্টক পরিবর্তন'],
-  ['Showing', 'দেখানো হচ্ছে'],
-  ['entries', 'টি এন্ট্রি'],
-  ['Show', 'দেখান'],
-  ['of', 'মোট'],
-  ['to', 'থেকে'],
   ['Search by title, author, category or ISBN...', 'বইয়ের নাম, লেখক, ক্যাটাগরি বা ISBN দিয়ে খুঁজুন...'],
   ['Search movement...', 'স্টক মুভমেন্ট খুঁজুন...'],
   ['No records found.', 'কোনো তথ্য পাওয়া যায়নি।'],
@@ -163,7 +162,8 @@ export const dashboardTranslations = [
   ['Search by order ID, customer, shop or phone...', 'অর্ডার আইডি, ক্রেতা, দোকান বা ফোন দিয়ে খুঁজুন...'],
   ['Order ID', 'অর্ডার আইডি'],
   ['Channel', 'চ্যানেল'],
-  ['Customer / Shop', 'ক্রেতা / দোকান'],
+  ['Customer / Shop', 'ক্রেতা / পাইকারি'],
+  ['Customer / Wholesale', 'ক্রেতা / পাইকারি'],
   ['Price', 'মূল্য'],
   ['Arrival Time', 'আসার সময়'],
   ['Order Details', 'অর্ডার বিস্তারিত'],
@@ -175,7 +175,7 @@ export const dashboardTranslations = [
   ['Total', 'সর্বমোট'],
   ['Counter Cash Memo / Invoice', 'কাউন্টার ক্যাশ মেমো / চালান'],
   ['Cash Memo Preview', 'ক্যাশ মেমো প্রিভিউ'],
-  ['Shop', 'দোকান'],
+  ['Shop', 'পাইকারি'],
   ['Memo No', 'মেমো নং'],
   ['Representative', 'প্রতিনিধি'],
   ['Date', 'তারিখ'],
@@ -218,6 +218,7 @@ export function applyDashboardDomTranslations(root, language) {
   const allElements = [root, ...root.querySelectorAll('*')]
 
   allElements.forEach(element => {
+    if (element.closest('[data-no-translate="true"]')) return
     if (!originalAttributes.has(element)) originalAttributes.set(element, new Map())
     const attributeOriginals = originalAttributes.get(element)
 
@@ -270,7 +271,10 @@ export function applyDashboardDomTranslations(root, language) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
   while (walker.nextNode()) {
     const node = walker.currentNode
-    if (!node.nodeValue || node.parentElement?.closest('script,style,textarea')) {
+    if (
+      !node.nodeValue ||
+      node.parentElement?.closest('script,style,textarea,[data-no-translate="true"]')
+    ) {
       continue
     }
     if (!originalTextNodes.has(node)) {

@@ -16,6 +16,7 @@ import DataTable from '../../../components/dashboard/DataTable';
 import PageHeader from '../../../components/dashboard/PageHeader';
 import { useAuth } from '../../../context/useAuth';
 import { useData } from '../../../context/useData';
+import { getCategoryLabel } from '../../../utils/i18n';
 import { PERMISSIONS } from '../../../utils/roles';
 
 /* ---------- helpers ---------- */
@@ -240,9 +241,9 @@ const entryDate = entry =>
   entry.createdAt || entry.date || entry.timestamp || null;
 
 const formatDate = value => {
-  if (!value) return '—';
+  if (!value) return 'N/A';
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return 'N/A';
   return date.toLocaleString(undefined, {
     day: '2-digit',
     month: 'short',
@@ -318,6 +319,11 @@ function StockManagement() {
       delta,
       reason,
       currentUser.id,
+      {
+        channel: 'manual',
+        userName: currentUser?.name,
+        userRole: currentUser?.role,
+      },
     );
     if (!result.success) {
       toast.error(result.message);
@@ -326,6 +332,26 @@ function StockManagement() {
     toast.success('Stock updated successfully.');
     setSelectedBook(null);
     return true;
+  };
+
+  const quickAdjustStock = (book, delta) => {
+    if (!canManage) return;
+    const reason =
+      delta > 0
+        ? `Quick stock increment (+${delta})`
+        : `Quick stock decrement (${delta})`;
+    const result = updateBookStock(book.id, delta, reason, currentUser?.id, {
+      channel: 'manual',
+      userName: currentUser?.name,
+      userRole: currentUser?.role,
+    });
+    if (!result.success) {
+      toast.error(result.message);
+      return;
+    }
+    toast.success(
+      `${book.title}: stock ${delta > 0 ? 'increased' : 'decreased'} to ${Number(book.stock || 0) + delta}.`,
+    );
   };
 
   const categories = useMemo(
@@ -500,7 +526,7 @@ function StockManagement() {
                 <option value="all">All categories</option>
                 {categories.map(item => (
                   <option key={item} value={item}>
-                    {item}
+                    {getCategoryLabel(item)}
                   </option>
                 ))}
               </select>
@@ -523,26 +549,28 @@ function StockManagement() {
               activeTab={activeTab}
               onTabChange={setActiveTab}
               data={displayedBooks}
+              onRowClick={book =>
+                canManage ? setSelectedBook(book) : setHistoryBook(book)
+              }
               searchKeys={['title', 'author', 'category', 'isbn', 'sku']}
               searchPlaceholder="Search by title, author, category or ISBN..."
               columns={[
                 {
                   key: 'title',
                   header: 'Book Details',
-                  // sortable: true,
-                  width: '240px',
+                  cellClassName: 'whitespace-nowrap',
                   render: book => (
-                    <div className="flex min-w-[220px] items-center gap-3">
+                    <div className="flex items-center gap-3 whitespace-nowrap">
                       <img
                         src={book.cover}
                         alt=""
-                        className="h-11 w-8 rounded-lg object-cover shadow-2xs"
+                        className="h-11 w-8 shrink-0 rounded-lg object-cover shadow-2xs"
                       />
                       <div className="min-w-0">
-                        <p className="break-words font-semibold leading-5 text-slate-800">
+                        <p className="whitespace-nowrap font-semibold leading-5 text-slate-800">
                           {book.title}
                         </p>
-                        <p className="break-words text-xs leading-5 text-slate-400">
+                        <p className="whitespace-nowrap text-xs leading-5 text-slate-400">
                           {book.author}
                         </p>
                       </div>
@@ -552,55 +580,95 @@ function StockManagement() {
                 {
                   key: 'isbn',
                   header: 'SKU / ISBN',
-                  width: '125px',
-                  align: 'left',
+                  align: 'center',
+                  cellClassName: 'whitespace-nowrap',
                   render: book => (
-                    <span className="text-xs text-slate-500">
-                      {book.isbn || book.sku || '—'}
+                    <span className="whitespace-nowrap text-xs text-slate-500">
+                      {book.isbn || book.sku || 'N/A'}
                     </span>
                   ),
                 },
                 {
                   key: 'category',
                   header: 'Category',
-                  // sortable: true,
-                  width: '145px',
-                  cellClassName: 'whitespace-normal break-words',
+                  cellClassName: 'whitespace-nowrap',
+                  render: book => (
+                    <span className="whitespace-nowrap text-xs text-slate-600">
+                      {getCategoryLabel(book.category)}
+                    </span>
+                  ),
                 },
                 {
                   key: 'price',
                   header: 'Unit Price',
-                  // sortable: true,
-                  width: '110px',
-                  align: 'right',
+                  align: 'center',
+                  cellClassName: 'whitespace-nowrap',
                   sortValue: book => Number(book.price || 0),
                   render: book =>
-                    book.price !== undefined ? money(book.price) : '—',
+                    book.price !== undefined ? money(book.price) : 'N/A',
                 },
                 {
                   key: 'stock',
                   header: 'Current Stock',
-                  // sortable: true,
-                  width: '145px',
+                  align: 'center',
+                  cellClassName: 'whitespace-nowrap',
                   sortValue: book => Number(book.stock || 0),
                   render: book => {
+                    const currentStock = Number(book.stock || 0);
                     const status = getStatus(book);
                     const limit = Number(book.lowStockLimit || 0);
                     // bar is full at 2x the alert limit
                     const percent = Math.min(
                       100,
                       limit > 0
-                        ? (Number(book.stock || 0) / (limit * 2)) * 100
-                        : Number(book.stock || 0) > 0
+                        ? (currentStock / (limit * 2)) * 100
+                        : currentStock > 0
                           ? 100
                           : 0,
                     );
                     return (
-                      <div className="min-w-24">
-                        <p className="font-semibold text-slate-800">
-                          {book.stock}
-                        </p>
-                        <div className="mt-1 h-1.5 w-full rounded-full bg-slate-100">
+                      <div
+                        className="mx-auto w-28 whitespace-nowrap"
+                        onClick={e => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-center gap-2">
+                          {canManage ? (
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                disabled={currentStock <= 0}
+                                onClick={() => quickAdjustStock(book, -1)}
+                                aria-label={`Decrease stock for ${book.title}`}
+                                title="Decrease stock by 1"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                <FiMinus size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedBook(book)}
+                                title="Click for custom stock adjustment"
+                                className="min-w-[2ch] text-center font-semibold text-slate-800 hover:text-primary-hover"
+                              >
+                                {currentStock}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => quickAdjustStock(book, 1)}
+                                aria-label={`Increase stock for ${book.title}`}
+                                title="Increase stock by 1"
+                                className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700"
+                              >
+                                <FiPlus size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="font-semibold text-slate-800">
+                              {currentStock}
+                            </p>
+                          )}
+                        </div>
+                        <div className="mt-1.5 h-1.5 w-full rounded-full bg-slate-100">
                           <div
                             className={`h-1.5 rounded-full ${STATUS_STYLE[status].bar}`}
                             style={{ width: `${percent}%` }}
@@ -613,23 +681,21 @@ function StockManagement() {
                 {
                   key: 'lowStockLimit',
                   header: 'Alert Limit',
-                  // sortable: true,
-                  width: '110px',
                   align: 'center',
+                  cellClassName: 'whitespace-nowrap',
                   sortValue: book => Number(book.lowStockLimit || 0),
                 },
                 {
                   key: 'status',
                   header: 'Status',
-                  width: '120px',
                   align: 'center',
+                  cellClassName: 'whitespace-nowrap',
                   sortValue: book => Number(book.stock || 0),
-                  // sortable: true,
                   render: book => {
                     const style = STATUS_STYLE[getStatus(book)];
                     return (
                       <span
-                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${style.badge}`}
+                        className={`inline-flex items-center whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${style.badge}`}
                       >
                         {style.label}
                       </span>
@@ -639,9 +705,8 @@ function StockManagement() {
                 {
                   key: 'stockValue',
                   header: 'Stock Value',
-                  // sortable: true,
-                  width: '120px',
-                  align: 'right',
+                  align: 'center',
+                  cellClassName: 'whitespace-nowrap',
                   sortValue: book =>
                     Number(book.price || 0) * Number(book.stock || 0),
                   render: book =>
@@ -650,14 +715,14 @@ function StockManagement() {
                 {
                   key: 'updatedAt',
                   header: 'Last Updated',
-                  width: '150px',
+                  cellClassName: 'whitespace-nowrap',
                   render: book => {
                     const time =
                       lastUpdatedByBook.get(book.id) ??
                       lastUpdatedByBook.get(book.title);
                     return (
-                      <span className="text-xs text-slate-500">
-                        {time ? formatDate(time) : '—'}
+                      <span className="whitespace-nowrap text-xs text-slate-500">
+                        {time ? formatDate(time) : 'N/A'}
                       </span>
                     );
                   },
@@ -688,7 +753,7 @@ function StockManagement() {
               icon={FiShoppingBag}
               label={`Counter Sale · ${salesSummary.counter.count} times`}
               value={`${salesSummary.counter.units} copies`}
-              tone="text-violet-600 bg-violet-50"
+              tone="text-violet-600"
               onClick={() => {
                 setHistoryFilter('counter');
                 setHistoryLimit(10);
@@ -698,7 +763,7 @@ function StockManagement() {
               icon={FiMonitor}
               label={`Online Sale · ${salesSummary.online.count} times`}
               value={`${salesSummary.online.units} copies`}
-              tone="text-sky-600 bg-sky-50"
+              tone="text-sky-600"
               onClick={() => {
                 setHistoryFilter('online');
                 setHistoryLimit(10);
@@ -751,10 +816,8 @@ function SummaryCard({ icon: Icon, label, value, tone, onClick }) {
       onClick={onClick}
       className="flex items-center gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 text-left shadow-xs"
     >
-      <span
-        className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone}`}
-      >
-        <Icon size={18} />
+      <span className={tone}>
+        <Icon size={20} />
       </span>
       <span>
         <span className="block text-xs text-slate-400">{label}</span>
@@ -786,7 +849,7 @@ function HistoryTable({
     {
       key: 'createdAt',
       header: 'Date & Time',
-      width: '155px',
+      cellClassName: 'whitespace-nowrap',
       sortable: true,
       render: entry => (
         <span className="whitespace-nowrap text-slate-600">
@@ -797,21 +860,21 @@ function HistoryTable({
     {
       key: 'bookTitle',
       header: 'Book',
-      width: '190px',
+      cellClassName: 'whitespace-nowrap',
       sortable: true,
       render: entry => (
-        <span className="font-semibold text-slate-800">{entry.bookTitle}</span>
+        <span className="whitespace-nowrap font-semibold text-slate-800">{entry.bookTitle}</span>
       ),
     },
     {
       key: 'channel',
       header: 'Type',
-      width: '125px',
+      cellClassName: 'whitespace-nowrap',
       render: entry => {
         const channel = getChannel(entry);
         const style = CHANNEL_STYLE[channel];
         return (
-          <span className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${style.badge}`}>
+          <span className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${style.badge}`}>
             {style.label}
           </span>
         );
@@ -820,11 +883,11 @@ function HistoryTable({
     {
       key: 'userName',
       header: 'Sold / Updated By',
-      width: '150px',
+      cellClassName: 'whitespace-nowrap',
       render: entry => {
-        const person = entry.userName || entry.performedBy || '—';
+        const person = entry.userName || entry.performedBy || 'N/A';
         return (
-          <div>
+          <div className="whitespace-nowrap">
             <p className="font-medium text-slate-700">{person}</p>
             {entry.userRole && (
               <p className="text-[11px] text-slate-400">{entry.userRole}</p>
@@ -836,19 +899,19 @@ function HistoryTable({
     {
       key: 'reason',
       header: 'Reference / Reason',
-      width: '220px',
+      cellClassName: 'whitespace-nowrap',
       render: entry => (
-        <span className="text-slate-600">{entry.reason}</span>
+        <span className="whitespace-nowrap text-slate-600">{entry.reason}</span>
       ),
     },
     {
       key: 'delta',
       header: 'Qty',
-      width: '80px',
       align: 'right',
+      cellClassName: 'whitespace-nowrap',
       sortable: true,
       render: entry => (
-        <span className={`font-bold ${entry.delta > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+        <span className={`whitespace-nowrap font-bold ${entry.delta > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
           {entry.delta > 0 ? '+' : ''}{entry.delta}
         </span>
       ),
@@ -862,7 +925,7 @@ function HistoryTable({
         <span className="whitespace-nowrap text-slate-600">
           {entry.previousStock !== undefined && entry.newStock !== undefined
             ? `${entry.previousStock} → ${entry.newStock}`
-            : '—'}
+            : 'N/A'}
         </span>
       ),
     },
@@ -885,7 +948,7 @@ function HistoryTable({
             : null;
         return (
           <span className="whitespace-nowrap font-semibold text-slate-800">
-            {amount !== null ? money(amount) : '—'}
+            {amount !== null ? money(amount) : 'N/A'}
           </span>
         );
       },
@@ -1099,7 +1162,7 @@ function StockAdjustModal({ book, onClose, onSubmit }) {
           <div>
             <p>Alert limit</p>
             <p className="mt-0.5 text-base font-bold text-slate-900">
-              {book.lowStockLimit ?? '—'}
+              {book.lowStockLimit ?? 'N/A'}
             </p>
           </div>
           <div>
@@ -1113,7 +1176,7 @@ function StockAdjustModal({ book, onClose, onSubmit }) {
                     : 'text-blue-600'
               }`}
             >
-              {validQuantity ? newStock : '—'}
+              {validQuantity ? newStock : 'N/A'}
             </p>
           </div>
         </div>
@@ -1145,13 +1208,13 @@ function StockAdjustModal({ book, onClose, onSubmit }) {
               setAmount(event.target.value);
               setError('');
             }}
-            className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
+            className="mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-900 outline-none focus:border-[#E5A316]"
           />
         </label>
 
         <div className="mt-4">
-          <p className="text-xs font-semibold text-slate-700">Reason</p>
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
+          <p className="text-xs font-semibold text-slate-700"> Note </p>
+          {/* <div className="mt-1.5 flex flex-wrap gap-1.5">
             {REASON_PRESETS[mode].map(preset => (
               <button
                 key={preset}
@@ -1169,7 +1232,7 @@ function StockAdjustModal({ book, onClose, onSubmit }) {
                 {preset}
               </button>
             ))}
-          </div>
+          </div> */}
           <textarea
             value={reason}
             onChange={event => {
@@ -1178,7 +1241,7 @@ function StockAdjustModal({ book, onClose, onSubmit }) {
             }}
             rows="2"
             aria-label="Reason"
-            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-900 outline-none focus:border-blue-500"
+            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-900 outline-none focus:border-[#E5A316]"
             placeholder="Pick a reason above or write your own..."
           />
         </div>

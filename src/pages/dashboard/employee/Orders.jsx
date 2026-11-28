@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   FiAlertTriangle,
+  FiBookmark,
   FiCheckCircle,
   FiChevronDown,
   FiChevronUp,
   FiClock,
-  FiColumns,
   FiDollarSign,
   FiDownload,
   FiEye,
@@ -17,15 +17,17 @@ import {
   FiSearch,
   FiSend,
   FiShoppingBag,
+  FiSliders,
   FiTag,
   FiTruck,
   FiX,
   FiXCircle,
 } from 'react-icons/fi';
+import Pagination from '../../../components/common/Pagination';
 import PageHeader from '../../../components/dashboard/PageHeader';
 import { useAuth } from '../../../context/useAuth';
 import { useData } from '../../../context/useData';
-import { formatCurrency } from '../../../utils/format';
+import { formatCurrency, toEnglishDigits } from '../../../utils/format';
 import { ROLES } from '../../../utils/roles';
 
 /* ------------------------------------------------------------------ */
@@ -59,12 +61,12 @@ const CHANNELS = [
   { value: 'other', label: 'Other' },
 ];
 
-const ORDER_STATUSES = [
-  { value: 'new', label: 'New', tone: 'indigo' },
-  { value: 'confirmed', label: 'Confirmed', tone: 'blue' },
-  { value: 'processing', label: 'Processing', tone: 'amber' },
-  { value: 'completed', label: 'Completed', tone: 'emerald' },
-  { value: 'cancelled', label: 'Cancelled', tone: 'slate' },
+const PAYMENT_METHODS = [
+  { value: 'bkash', label: 'bKash', tone: 'rose' },
+  { value: 'nagad', label: 'Nagad', tone: 'orange' },
+  { value: 'cod', label: 'COD', tone: 'amber' },
+  { value: 'bank', label: 'Bank', tone: 'blue' },
+  { value: 'cash', label: 'Cash', tone: 'emerald' },
 ];
 
 const PAYMENT_STATUSES = [
@@ -73,6 +75,14 @@ const PAYMENT_STATUSES = [
   { value: 'partial', label: 'Partially Paid', tone: 'amber' },
   { value: 'refunded', label: 'Refunded', tone: 'violet' },
   { value: 'partially_refunded', label: 'Partially Refunded', tone: 'orange' },
+];
+
+const ORDER_STATUSES = [
+  { value: 'new', label: 'New', tone: 'indigo' },
+  { value: 'approved', label: 'Approved', tone: 'blue' },
+  { value: 'shipping', label: 'Shipping', tone: 'amber' },
+  { value: 'delivered', label: 'Delivered', tone: 'emerald' },
+  { value: 'cancelled', label: 'Cancelled', tone: 'slate' },
 ];
 
 const DELIVERY_STATUSES = [
@@ -88,12 +98,12 @@ const DELIVERY_STATUSES = [
 
 const COURIERS = ['Pathao', 'Steadfast', 'RedX', 'Other (manual)'];
 
-/* Valid status transitions. Each status is managed independently. */
+/* Valid status transitions. */
 const ORDER_FLOW = {
-  new: ['confirmed', 'cancelled'],
-  confirmed: ['processing', 'cancelled'],
-  processing: ['completed', 'cancelled'],
-  completed: [],
+  new: ['approved', 'cancelled'],
+  approved: ['shipping', 'cancelled'],
+  shipping: ['delivered', 'cancelled'],
+  delivered: [],
   cancelled: [],
 };
 
@@ -109,9 +119,9 @@ const DELIVERY_FLOW = {
 };
 
 const ORDER_EVENT = {
-  confirmed: 'Order confirmed',
-  processing: 'Processing started',
-  completed: 'Order completed',
+  approved: 'Order approved',
+  shipping: 'Handed over for shipping',
+  delivered: 'Order delivered',
   cancelled: 'Order cancelled',
 };
 
@@ -127,23 +137,32 @@ const DELIVERY_EVENT = {
 
 const COLUMNS = [
   { id: 'id', label: 'Order ID', sort: 'id', show: true },
-  { id: 'channel', label: 'Channel', show: true },
-  { id: 'customer', label: 'Customer / Shop', sort: 'customer', show: true },
-  { id: 'phone', label: 'Phone', show: false },
+  { id: 'customer', label: 'Name', sort: 'customer', show: true },
+  { id: 'phone', label: 'Phone', show: true },
   { id: 'items', label: 'Items', sort: 'items', show: true },
   {
     id: 'amount',
     label: 'Order Amount',
     sort: 'amount',
-    align: 'right',
+    align: 'center',
     show: true,
   },
-  { id: 'charge', label: 'Delivery Charge', align: 'right', show: false },
+  {
+    id: 'charge',
+    label: 'Delivery Charge',
+    align: 'center',
+    show: true,
+  },
+  {
+    id: 'netProfit',
+    label: 'Net Profit',
+    sort: 'netProfit',
+    align: 'center',
+    show: true,
+  },
   { id: 'payment', label: 'Payment', show: true },
   { id: 'orderStatus', label: 'Order Status', show: true },
-  { id: 'delivery', label: 'Delivery Status', show: true },
   { id: 'date', label: 'Order Date', sort: 'date', show: true },
-  { id: 'courier', label: 'Courier', show: true },
 ];
 
 /* ------------------------------------------------------------------ */
@@ -208,22 +227,37 @@ const loadStore = () => {
   }
 };
 
+const normalizeOrderStatus = raw => {
+  if (raw === 'confirmed' || raw === 'processing') return 'approved';
+  if (raw === 'shipped' || raw === 'in_transit' || raw === 'out_for_delivery')
+    return 'shipping';
+  if (raw === 'completed' || raw === 'delivered') return 'delivered';
+  if (raw === 'cancelled') return 'cancelled';
+  if (['new', 'approved', 'shipping', 'delivered', 'cancelled'].includes(raw))
+    return raw;
+  return 'new';
+};
+
 /* Combines the order from useData() with the extra fulfillment details kept locally. */
-function buildRow(order, m = {}) {
+function buildRow(order, m = {}, books = []) {
   const ctx = String(order.status || 'new').toLowerCase();
   const isCounter = order.orderType === 'counter' || Boolean(order.shopName);
   const pay = String(order.paymentStatus || '').toLowerCase();
+  const paymentMethod = String(order.paymentMethod || 'cod').toLowerCase();
   const items = order.items || [];
 
-  const orderStatus =
+  const orderStatus = normalizeOrderStatus(
     ctx === 'cancelled'
       ? 'cancelled'
       : (m.orderStatus ??
         (ctx === 'delivered'
-          ? 'completed'
-          : ctx === 'new'
-            ? 'new'
-            : 'processing'));
+          ? 'delivered'
+          : ctx === 'shipped'
+            ? 'shipping'
+            : ctx === 'processing'
+              ? 'approved'
+              : 'new')),
+  );
 
   const deliveryStatus = isCounter
     ? null
@@ -266,6 +300,15 @@ function buildRow(order, m = {}) {
     order.paymentMethod === 'cod' && outstanding > 0 ? outstanding : 0;
   const refund =
     m.returnInfo?.status === 'approved' ? num(m.returnInfo.refund) : 0;
+  const wholesaleCost = items.reduce((sum, item) => {
+    const book = books.find(b => String(b.id) === String(item.bookId));
+    const unitWholesale =
+      book?.wholesalePrice != null
+        ? num(book.wholesalePrice)
+        : Math.round(num(item.price) * 0.7);
+    return sum + unitWholesale * num(item.quantity);
+  }, 0);
+  const netProfit = Math.round(payable - charge - wholesaleCost);
 
   const addressParts = String(order.address || '')
     .split(',')
@@ -288,10 +331,14 @@ function buildRow(order, m = {}) {
     id: order.id,
     order,
     m,
+    pinned: Boolean(m.pinned),
+    printed: Boolean(m.printed),
+    printedAt: m.printedAt || null,
     isCounter,
     channel,
     orderStatus,
     deliveryStatus,
+    paymentMethod,
     paymentStatus,
     courier: m.courier || order.courier || '',
     tracking: m.trackingId || order.trackingId || '',
@@ -300,6 +347,7 @@ function buildRow(order, m = {}) {
     district,
     charge,
     payable,
+    netProfit,
     discount,
     subtotal,
     paid,
@@ -335,13 +383,8 @@ function canOrderMove(row, to) {
   if (row.isCounter) return 'Counter sales follow the counter workflow';
   if (!ORDER_FLOW[row.orderStatus]?.includes(to))
     return 'Not a valid next step from the current status';
-  if (to === 'completed' && row.deliveryStatus !== 'delivered')
-    return 'Delivery must be Delivered first';
-  if (
-    to === 'cancelled' &&
-    !['not_dispatched', 'ready_to_ship'].includes(row.deliveryStatus)
-  )
-    return 'Already shipped — use the return process';
+  if (to === 'cancelled' && row.orderStatus === 'delivered')
+    return 'Delivered orders should use return flow';
   return null;
 }
 
@@ -350,15 +393,21 @@ function canDeliveryMove(row, to) {
   if (row.orderStatus === 'cancelled') return 'Order is cancelled';
   if (!DELIVERY_FLOW[row.deliveryStatus]?.includes(to))
     return 'Not a valid next step from the current status';
-  if (to === 'ready_to_ship' && row.orderStatus !== 'processing')
-    return 'Order must be in Processing first';
   if (to === 'shipped' && !row.courier) return 'Assign a courier first';
   return null;
 }
 
 /* Status kept in the existing useData() order record (new / processing / shipped / delivered / cancelled). */
 const contextOrderTarget = to =>
-  to === 'cancelled' ? 'cancelled' : to === 'processing' ? 'processing' : null;
+  to === 'cancelled'
+    ? 'cancelled'
+    : to === 'approved'
+      ? 'processing'
+      : to === 'shipping'
+        ? 'shipped'
+        : to === 'delivered'
+          ? 'delivered'
+          : null;
 const contextDeliveryTarget = to =>
   to === 'ready_to_ship'
     ? 'processing'
@@ -660,159 +709,6 @@ function ConfirmDialog({
 /* ------------------------------------------------------------------ */
 /* Order details modal                                                 */
 /* ------------------------------------------------------------------ */
-
-function ShippingTab({ row, api }) {
-  const m = row.m;
-  const o = row.order;
-  const [form, setForm] = useState({
-    courier: row.courier || '',
-    consignmentId: row.consignment || '',
-    trackingId: row.tracking || '',
-    shipDate: m.shipDate || '',
-    eta: m.eta || '',
-    deliveryCharge: String(row.charge || ''),
-    courierStatus: m.courierStatus || '',
-    recipientName: m.recipientName || o.customerName || o.shopName || '',
-    recipientPhone: m.recipientPhone || o.phone || '',
-    shipAddress: m.shipAddress || o.address || '',
-  });
-  const set = key => value => setForm(prev => ({ ...prev, [key]: value }));
-  const attempts = m.attempts || [];
-  const history = m.shipmentHistory || [];
-
-  return (
-    <div className="space-y-4">
-      <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-        <FiAlertTriangle className="mt-0.5 shrink-0" size={14} />
-        <p>
-          Courier API is not connected. Shipments are recorded <b>manually</b>{' '}
-          here — nothing is booked with Pathao, Steadfast or RedX from this
-          screen. Enter the consignment ID after booking on the courier&apos;s
-          own panel.
-        </p>
-      </div>
-
-      <Section
-        title="Shipping information"
-        right={
-          <button
-            type="button"
-            onClick={() => api.printLabels([row])}
-            className={btnOutline}
-          >
-            <FiTag size={14} /> Print label
-          </button>
-        }
-      >
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <Field label="Courier company">
-            <select
-              value={form.courier}
-              onChange={e => set('courier')(e.target.value)}
-              className={inputCls}
-            >
-              <option value="">Select courier</option>
-              {COURIERS.map(c => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </Field>
-          <TextInput
-            label="Consignment ID"
-            value={form.consignmentId}
-            onChange={set('consignmentId')}
-          />
-          <TextInput
-            label="Tracking ID"
-            value={form.trackingId}
-            onChange={set('trackingId')}
-          />
-          <TextInput
-            label="Shipment date"
-            type="date"
-            value={form.shipDate}
-            onChange={set('shipDate')}
-          />
-          <TextInput
-            label="Estimated delivery date"
-            type="date"
-            value={form.eta}
-            onChange={set('eta')}
-          />
-          <TextInput
-            label="Delivery charge (৳)"
-            type="number"
-            min="0"
-            value={form.deliveryCharge}
-            onChange={set('deliveryCharge')}
-          />
-          <TextInput
-            label="Recipient name"
-            value={form.recipientName}
-            onChange={set('recipientName')}
-          />
-          <TextInput
-            label="Recipient phone"
-            value={form.recipientPhone}
-            onChange={set('recipientPhone')}
-          />
-          <TextInput
-            label="Latest courier status"
-            value={form.courierStatus}
-            onChange={set('courierStatus')}
-            placeholder="e.g. Picked up"
-          />
-          <div className="sm:col-span-2 lg:col-span-3">
-            <TextInput
-              label="Shipping address"
-              value={form.shipAddress}
-              onChange={set('shipAddress')}
-            />
-          </div>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-slate-500">
-            Delivery attempts: <b>{attempts.length}</b>
-            {row.consignment &&
-              ' · A consignment ID is already stored for this order (saving updates it).'}
-          </p>
-          <button
-            type="button"
-            onClick={() => api.saveShipment(row, form)}
-            className={btnPrimary}
-          >
-            <FiSend size={14} /> Save shipment details
-          </button>
-        </div>
-      </Section>
-
-      <Section title="Shipment history">
-        {history.length === 0 ? (
-          <p className="text-sm text-slate-400">No shipment records yet.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100 text-sm">
-            {[...history].reverse().map((h, i) => (
-              <li
-                key={i}
-                className="flex flex-wrap items-center justify-between gap-2 py-2"
-              >
-                <span className="font-medium text-slate-800">
-                  {h.courier || '—'} · {h.consignmentId || 'no consignment ID'}
-                  {h.courierStatus && ` · ${h.courierStatus}`}
-                </span>
-                <span className="text-xs text-slate-500">
-                  {fmtDateTime(h.at)} · {h.by}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Section>
-    </div>
-  );
-}
 
 function IssuesTab({ row, api }) {
   const m = row.m;
@@ -1166,8 +1062,15 @@ function IssuesTab({ row, api }) {
 }
 
 function OrderDetailsModal({ row, rows, books, staffOptions, api, onClose }) {
-  const [tab, setTab] = useState('overview');
+  const [showIssues, setShowIssues] = useState(false);
   const { order, m } = row;
+  const [courierForm, setCourierForm] = useState({
+    courier: row.courier || '',
+    consignmentId: row.consignment || '',
+    trackingId: row.tracking || '',
+    courierStatus: m.courierStatus || '',
+  });
+  const [courierNote, setCourierNote] = useState('');
 
   useEffect(() => {
     const onKey = e => e.key === 'Escape' && onClose();
@@ -1181,48 +1084,55 @@ function OrderDetailsModal({ row, rows, books, staffOptions, api, onClose }) {
   const timeline = [
     {
       key: 'placed',
-      label: 'Order placed',
+      label: 'Order Placed',
       at: order.date,
-      by: order.servedBy || 'Customer',
-      note: '',
+      by: order.customerName || 'Customer',
+      note: order.notes || order.deliveryInstructions || '',
     },
     ...(m.timeline || []),
-  ];
-  const lastUpdated = timeline[timeline.length - 1]?.at ?? order.date;
-  const audit = api.audit.filter(a => a.orderId === row.id);
-
-  const tabs = [
-    { id: 'overview', label: 'Overview' },
-    ...(row.isCounter
-      ? []
-      : [
-          { id: 'shipping', label: 'Shipping & courier' },
-          { id: 'issues', label: 'Failed delivery & returns' },
-        ]),
-    { id: 'timeline', label: 'Timeline' },
   ];
 
   const nextOrder = (ORDER_FLOW[row.orderStatus] || []).filter(
     s => s !== 'cancelled',
   );
-  const nextDelivery = row.isCounter
-    ? []
-    : DELIVERY_FLOW[row.deliveryStatus] || [];
   const cancelReason = canOrderMove(row, 'cancelled');
+  const notePreview = order.deliveryInstructions || order.note || order.notes;
+  const stageSteps = ['new', 'approved', 'shipping', 'delivered'];
+  const stageIdx = stageSteps.indexOf(row.orderStatus);
 
   const askCancel = () =>
     api.askConfirm({
       title: `Cancel order ${row.id}?`,
-      body: 'The order will be cancelled and this is recorded in the timeline. Refunds, if any, are handled separately.',
+      body: 'The order will be cancelled and recorded in the tracking timeline.',
       confirmLabel: 'Cancel order',
       danger: true,
       withNote: true,
       onConfirm: note => api.moveOrder(row, 'cancelled', note),
     });
 
+  const handleSaveCourier = e => {
+    e.preventDefault();
+    api.saveShipment(row, {
+      ...courierForm,
+      shipDate: m.shipDate || todayLocal(),
+      eta: m.eta || '',
+      deliveryCharge: String(row.charge || ''),
+      recipientName: m.recipientName || order.customerName || '',
+      recipientPhone: toEnglishDigits(m.recipientPhone || order.phone || ''),
+      shipAddress: m.shipAddress || order.address || '',
+    });
+  };
+
+  const handleAddNote = e => {
+    e.preventDefault();
+    if (!courierNote.trim()) return;
+    api.addTrackingNote(row, courierNote.trim());
+    setCourierNote('');
+  };
+
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-dark/70 px-3 py-6 backdrop-blur-sm"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/45 px-3 py-6"
       onClick={onClose}
     >
       <div
@@ -1230,26 +1140,31 @@ function OrderDetailsModal({ row, rows, books, staffOptions, api, onClose }) {
         aria-modal="true"
         aria-label={`Order ${row.id}`}
         onClick={e => e.stopPropagation()}
-        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-xl bg-slate-50 shadow-2xl"
+        className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50 shadow-2xl"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white p-5">
+        {/* Clean Header: Order ID, Status, Printed/Unprinted, Note */}
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-primary-hover">
-              Order details
-            </p>
-            <h2 className="mt-0.5 font-heading text-2xl font-bold text-dark">
-              {row.id}
-            </h2>
-            <div className="mt-2 flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-heading text-lg font-bold text-slate-900">
+                {row.id}
+              </h2>
               <Pill list={ORDER_STATUSES} value={row.orderStatus} />
-              <Pill list={PAYMENT_STATUSES} value={row.paymentStatus} />
-              {row.deliveryStatus && (
-                <Pill list={DELIVERY_STATUSES} value={row.deliveryStatus} />
-              )}
-              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
-                {labelOf(CHANNELS, row.channel)}
+              <span
+                className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                  row.printed
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-slate-100 text-slate-600'
+                }`}
+              >
+                {row.printed ? 'Printed' : 'Unprinted'}
               </span>
+              <Pill list={PAYMENT_METHODS} value={row.paymentMethod} />
             </div>
+            <p className="mt-1 text-xs text-slate-500">
+              {fmtDateTime(order.date)}
+              {notePreview ? ` · Note: ${notePreview}` : ''}
+            </p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <button
@@ -1257,452 +1172,399 @@ function OrderDetailsModal({ row, rows, books, staffOptions, api, onClose }) {
               onClick={() => api.printInvoices([row])}
               className={btnOutline}
             >
-              <FiPrinter size={14} /> Invoice
+              <FiPrinter size={14} /> {row.printed ? 'Reprint' : 'Print'}
+            </button>
+            <button
+              type="button"
+              onClick={() => api.printLabels([row])}
+              className={btnOutline}
+            >
+              <FiTag size={14} /> Label
             </button>
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close"
-              className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              className={btnOutline}
             >
-              <FiX size={18} />
+              Close
             </button>
           </div>
         </div>
 
-        <div
-          role="tablist"
-          className="flex gap-1 overflow-x-auto border-b border-slate-200 bg-white px-4"
-        >
-          {tabs.map(t => (
-            <button
-              key={t.id}
-              type="button"
-              role="tab"
-              aria-selected={tab === t.id}
-              onClick={() => setTab(t.id)}
-              className={`-mb-px shrink-0 border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
-                tab === t.id
-                  ? 'border-blue-600 text-blue-600'
-                  : 'border-transparent text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
+        {/* Stacked Clean Body (Items -> Invoice -> Customer Info -> Courier/Order Timeline) */}
         <div className="space-y-4 overflow-y-auto p-5">
-          {tab === 'overview' && (
-            <>
-              <Section title="Order overview">
-                <InfoGrid
-                  items={[
-                    ['Order ID', row.id],
-                    ['Order date & time', fmtDateTime(order.date)],
-                    ['Last updated', fmtDateTime(lastUpdated)],
-                    ['Sales channel', labelOf(CHANNELS, row.channel)],
-                    ['Assigned staff', row.staff],
-                    ['Served by', order.servedBy],
-                  ]}
-                />
-                {!row.isCounter && (
-                  <div className="mt-4 grid gap-3 border-t border-slate-100 pt-4 sm:grid-cols-2">
-                    <Field label="Change sales channel">
-                      <select
-                        value={row.channel}
-                        onChange={e =>
-                          api.setMeta(
-                            row,
-                            { channel: e.target.value },
-                            `Channel → ${e.target.value}`,
-                          )
-                        }
-                        className={inputCls}
-                      >
-                        {CHANNELS.filter(c => c.value !== 'counter').map(c => (
-                          <option key={c.value} value={c.value}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                    <Field label="Assigned staff">
-                      <select
-                        value={row.staff}
-                        onChange={e =>
-                          api.setMeta(
-                            row,
-                            { assignedStaff: e.target.value },
-                            `Assigned to ${e.target.value || 'nobody'}`,
-                          )
-                        }
-                        className={inputCls}
-                      >
-                        <option value="">Unassigned</option>
-                        {staffOptions.map(s => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                  </div>
-                )}
-              </Section>
-
-              {row.isCounter ? (
-                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-                  This is a counter sale. It is handed over at the showroom, so
-                  the courier and delivery workflow does not apply.
-                </div>
-              ) : (
-                <Section title="Status management">
-                  <div className="grid gap-5 lg:grid-cols-3">
-                    <div>
-                      <p className="mb-2 text-xs font-semibold text-slate-500">
-                        Order status
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {nextOrder.length === 0 && (
-                          <span className="text-sm text-slate-400">
-                            No further steps
+          {/* 1. Book Items & Invoice Totals */}
+          <Section
+            title={`Book Items (${row.uniqueBooks} ${row.uniqueBooks === 1 ? 'book' : 'books'}, ${row.copies} ${row.copies === 1 ? 'copy' : 'copies'})`}
+          >
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[580px] text-left text-sm">
+                <thead>
+                  <tr className="border-b border-slate-200 text-xs text-slate-500">
+                    <th className="whitespace-nowrap py-2 pr-3 font-medium">
+                      Book
+                    </th>
+                    <th className="whitespace-nowrap py-2 pr-3 font-medium">
+                      SKU / ISBN
+                    </th>
+                    <th className="whitespace-nowrap py-2 pr-3 text-center font-medium">
+                      Qty
+                    </th>
+                    <th className="whitespace-nowrap py-2 pr-3 text-right font-medium">
+                      Unit Price
+                    </th>
+                    <th className="whitespace-nowrap py-2 pr-3 text-center font-medium">
+                      Discount
+                    </th>
+                    <th className="whitespace-nowrap py-2 text-right font-medium">
+                      Total
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {(order.items || []).map((item, idx) => {
+                    const book = books.find(
+                      b => String(b.id) === String(item.bookId),
+                    );
+                    const cover =
+                      book?.cover ?? book?.coverImage ?? book?.image;
+                    const retail = num(
+                      book?.retailPrice ?? book?.price ?? item.price,
+                    );
+                    const unitPrice = num(item.price);
+                    const discountPct =
+                      book?.offer != null
+                        ? num(book.offer)
+                        : retail > unitPrice && retail > 0
+                          ? Math.round(((retail - unitPrice) / retail) * 100)
+                          : 25;
+                    return (
+                      <tr key={item.bookId ?? idx}>
+                        <td className="py-2.5 pr-3">
+                          <div className="flex items-center gap-3">
+                            {cover ? (
+                              <img
+                                src={cover}
+                                alt=""
+                                className="h-11 w-8 shrink-0 rounded border border-slate-200 object-cover"
+                              />
+                            ) : (
+                              <span className="flex h-11 w-8 shrink-0 items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-300">
+                                <FiPackage size={14} />
+                              </span>
+                            )}
+                            <span className="font-medium text-slate-900">
+                              {item.title}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="whitespace-nowrap py-2.5 pr-3 text-xs text-slate-500">
+                          {book?.sku || book?.isbn || item.sku || '—'}
+                        </td>
+                        <td className="whitespace-nowrap py-2.5 pr-3 text-center text-slate-700">
+                          {item.quantity}
+                        </td>
+                        <td className="whitespace-nowrap py-2.5 pr-3 text-right text-slate-700">
+                          {formatCurrency(unitPrice)}
+                        </td>
+                        <td className="whitespace-nowrap py-2.5 pr-3 text-center">
+                          <span className="text-xs font-medium text-rose-600">
+                            {discountPct}% OFF
                           </span>
-                        )}
-                        {nextOrder.map(s => {
-                          const why = canOrderMove(row, s);
-                          return (
-                            <button
-                              key={s}
-                              type="button"
-                              disabled={Boolean(why)}
-                              title={why || ''}
-                              onClick={() => api.moveOrder(row, s)}
-                              className={btnOutline}
-                            >
-                              → {labelOf(ORDER_STATUSES, s)}
-                            </button>
-                          );
-                        })}
-                        {ORDER_FLOW[row.orderStatus]?.includes('cancelled') && (
-                          <button
-                            type="button"
-                            disabled={Boolean(cancelReason)}
-                            title={cancelReason || ''}
-                            onClick={askCancel}
-                            className={btnDanger}
-                          >
-                            Cancel order
-                          </button>
-                        )}
-                      </div>
-                      {nextOrder.map(s => {
-                        const why = canOrderMove(row, s);
-                        return why ? (
-                          <p
-                            key={s}
-                            className="mt-1.5 text-[11px] text-slate-400"
-                          >
-                            {labelOf(ORDER_STATUSES, s)}: {why}
-                          </p>
-                        ) : null;
-                      })}
-                    </div>
-
-                    <div>
-                      <p className="mb-2 text-xs font-semibold text-slate-500">
-                        Delivery status
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {nextDelivery.length === 0 && (
-                          <span className="text-sm text-slate-400">
-                            No further steps
-                          </span>
-                        )}
-                        {nextDelivery.map(s => {
-                          const why = canDeliveryMove(row, s);
-                          const viaForm =
-                            s === 'delivery_failed' || s === 'returned';
-                          return (
-                            <button
-                              key={s}
-                              type="button"
-                              disabled={Boolean(why)}
-                              title={
-                                why ||
-                                (viaForm
-                                  ? 'Handled in the Failed delivery & returns tab'
-                                  : '')
-                              }
-                              onClick={() =>
-                                viaForm
-                                  ? setTab('issues')
-                                  : api.moveDelivery(row, s)
-                              }
-                              className={btnOutline}
-                            >
-                              → {labelOf(DELIVERY_STATUSES, s)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      {nextDelivery.map(s => {
-                        const why = canDeliveryMove(row, s);
-                        return why ? (
-                          <p
-                            key={s}
-                            className="mt-1.5 text-[11px] text-slate-400"
-                          >
-                            {labelOf(DELIVERY_STATUSES, s)}: {why}
-                          </p>
-                        ) : null;
-                      })}
-                    </div>
-
-                    <div>
-                      <p className="mb-2 text-xs font-semibold text-slate-500">
-                        Payment
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {order.paymentMethod !== 'cod' &&
-                          row.paymentStatus === 'unpaid' && (
-                            <button
-                              type="button"
-                              onClick={() => api.verifyPayment(row)}
-                              className={`${btnBase} bg-emerald-600 text-white hover:bg-emerald-700`}
-                            >
-                              Payment verified
-                            </button>
-                          )}
-                        {order.paymentMethod === 'cod' &&
-                          row.deliveryStatus === 'delivered' &&
-                          ['unpaid', 'partial'].includes(row.paymentStatus) && (
-                            <button
-                              type="button"
-                              onClick={() => api.markCod(row)}
-                              className={`${btnBase} bg-emerald-600 text-white hover:bg-emerald-700`}
-                            >
-                              COD collected
-                            </button>
-                          )}
-                        {!(
-                          (order.paymentMethod !== 'cod' &&
-                            row.paymentStatus === 'unpaid') ||
-                          (order.paymentMethod === 'cod' &&
-                            row.deliveryStatus === 'delivered' &&
-                            ['unpaid', 'partial'].includes(row.paymentStatus))
-                        ) && (
-                          <span className="text-sm text-slate-400">
-                            No payment action needed
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </Section>
-              )}
-
-              <Section title="Customer information">
-                <InfoGrid
-                  items={[
-                    [
-                      row.isCounter ? 'Shop' : 'Customer name',
-                      order.shopName || order.customerName,
-                    ],
-                    ['Phone number', order.phone],
-                    [
-                      'Alternative phone',
-                      order.altPhone || order.alternativePhone,
-                    ],
-                    ['Email', order.email],
-                    [
-                      'Full address',
-                      order.address || (row.isCounter ? 'Showroom' : ''),
-                    ],
-                    ['District', row.district],
-                    ['Area / Thana', order.area || order.thana],
-                    [
-                      'Delivery instructions',
-                      order.deliveryInstructions || order.note || order.notes,
-                    ],
-                    ['Previous orders', String(previousOrders)],
-                    ...(order.commission > 0
-                      ? [['Commission', `${order.commission}%`]]
-                      : []),
-                  ]}
-                />
-              </Section>
-
-              <Section
-                title={`Book items — ${row.uniqueBooks} books, ${row.copies} copies`}
-              >
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[560px] text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-xs text-slate-500">
-                        <th className="py-2 pr-3 font-medium">Book</th>
-                        <th className="py-2 pr-3 font-medium">SKU / ISBN</th>
-                        <th className="py-2 pr-3 text-right font-medium">
-                          Qty
-                        </th>
-                        <th className="py-2 pr-3 text-right font-medium">
-                          Unit price
-                        </th>
-                        <th className="py-2 text-right font-medium">
-                          Subtotal
-                        </th>
+                        </td>
+                        <td className="whitespace-nowrap py-2.5 text-right font-semibold text-slate-900">
+                          {formatCurrency(unitPrice * num(item.quantity))}
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {(order.items || []).map((item, idx) => {
-                        const book = books.find(
-                          b => String(b.id) === String(item.bookId),
-                        );
-                        const cover =
-                          book?.cover ?? book?.coverImage ?? book?.image;
-                        return (
-                          <tr key={item.bookId ?? idx}>
-                            <td className="py-2.5 pr-3">
-                              <div className="flex items-center gap-3">
-                                {cover ? (
-                                  <img
-                                    src={cover}
-                                    alt=""
-                                    className="h-12 w-9 shrink-0 rounded object-cover"
-                                  />
-                                ) : (
-                                  <span className="flex h-12 w-9 shrink-0 items-center justify-center rounded bg-slate-100 text-slate-300">
-                                    <FiPackage size={14} />
-                                  </span>
-                                )}
-                                <span className="font-medium text-slate-800">
-                                  {item.title}
-                                </span>
-                              </div>
-                            </td>
-                            <td className="py-2.5 pr-3 text-slate-500">
-                              {book?.sku || book?.isbn || item.sku || '—'}
-                            </td>
-                            <td className="py-2.5 pr-3 text-right">
-                              {item.quantity}
-                            </td>
-                            <td className="py-2.5 pr-3 text-right">
-                              ৳{item.price}
-                            </td>
-                            <td className="py-2.5 text-right font-semibold">
-                              ৳{num(item.price) * num(item.quantity)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Invoice Breakdown */}
+            <div className="mt-4 border-t border-slate-100 pt-3">
+              <div className="ml-auto max-w-xs space-y-1 text-xs">
+                <div className="flex justify-between text-slate-600">
+                  <span>Subtotal</span>
+                  <span>{formatCurrency(row.subtotal)}</span>
                 </div>
-              </Section>
-
-              <Section title="Financial summary">
-                <div className="ml-auto max-w-sm space-y-1.5 text-sm">
-                  {[
-                    ['Subtotal', formatCurrency(row.subtotal)],
-                    ['Discount', `− ${formatCurrency(row.discount)}`],
-                    ['Delivery charge', formatCurrency(row.charge)],
-                  ].map(([k, v]) => (
-                    <div
-                      key={k}
-                      className="flex justify-between text-slate-600"
-                    >
-                      <span>{k}</span>
-                      <span className="font-medium">{v}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between border-t border-slate-200 pt-1.5 text-base font-bold text-slate-900">
-                    <span>Total payable</span>
-                    <span>{formatCurrency(row.payable)}</span>
+                {row.discount > 0 && (
+                  <div className="flex justify-between text-slate-600">
+                    <span>Discount</span>
+                    <span>− {formatCurrency(row.discount)}</span>
                   </div>
-                  {[
-                    ['Paid amount', formatCurrency(row.paid)],
-                    ['COD amount', formatCurrency(row.cod)],
-                    ['Refund amount', formatCurrency(row.refund)],
-                  ].map(([k, v]) => (
-                    <div
-                      key={k}
-                      className="flex justify-between text-slate-600"
-                    >
-                      <span>{k}</span>
-                      <span className="font-medium">{v}</span>
-                    </div>
-                  ))}
-                  <div
-                    className={`flex justify-between rounded-lg px-3 py-2 font-semibold ${row.outstanding > 0 ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}`}
-                  >
-                    <span>Outstanding</span>
-                    <span>{formatCurrency(row.outstanding)}</span>
-                  </div>
-                </div>
-              </Section>
-            </>
-          )}
-
-          {tab === 'shipping' && !row.isCounter && (
-            <ShippingTab
-              key={`${row.id}-${row.courier}-${row.consignment}`}
-              row={row}
-              api={api}
-            />
-          )}
-          {tab === 'issues' && !row.isCounter && (
-            <IssuesTab
-              key={`${row.id}-${row.deliveryStatus}-${m.returnInfo?.status || 'none'}`}
-              row={row}
-              api={api}
-            />
-          )}
-
-          {tab === 'timeline' && (
-            <>
-              <Section title="Order timeline">
-                <ol className="relative space-y-4 border-l border-slate-200 pl-5">
-                  {timeline.map((e, i) => (
-                    <li key={i} className="relative">
-                      <span className="absolute -left-[26px] top-1 h-3 w-3 rounded-full border-2 border-white bg-blue-500" />
-                      <p className="text-sm font-semibold text-slate-800">
-                        {e.label}
-                      </p>
-                      <p className="text-xs text-slate-500">
-                        {fmtDateTime(e.at)} · {e.by}
-                      </p>
-                      {e.note && (
-                        <p className="mt-0.5 text-sm text-slate-600">
-                          {e.note}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ol>
-              </Section>
-              <Section title="Audit log">
-                {audit.length === 0 ? (
-                  <p className="text-sm text-slate-400">
-                    No logged actions for this order yet.
-                  </p>
-                ) : (
-                  <ul className="divide-y divide-slate-100 text-sm">
-                    {audit.map((a, i) => (
-                      <li
-                        key={i}
-                        className="flex flex-wrap justify-between gap-2 py-2"
-                      >
-                        <span className="text-slate-700">{a.action}</span>
-                        <span className="text-xs text-slate-500">
-                          {a.by} · {fmtDateTime(a.at)}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
                 )}
-              </Section>
-            </>
-          )}
+                <div className="flex justify-between text-slate-600">
+                  <span>Delivery Charge</span>
+                  <span>{formatCurrency(row.charge)}</span>
+                </div>
+                <div className="flex justify-between border-t border-slate-200 pt-1.5 text-sm font-bold text-slate-900">
+                  <span>Invoice Total</span>
+                  <span>{formatCurrency(row.payable)}</span>
+                </div>
+                <div className="flex justify-between text-slate-600">
+                  <span>Payment ({labelOf(PAYMENT_METHODS, row.paymentMethod)})</span>
+                  <span className="font-semibold">
+                    {labelOf(PAYMENT_STATUSES, row.paymentStatus)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </Section>
+
+          {/* 2. Customer Information & Full Address */}
+          <Section title="Customer Information">
+            <InfoGrid
+              items={[
+                ['Name', order.customerName],
+                ['Phone', toEnglishDigits(order.phone)],
+                [
+                  'Alternative Phone',
+                  toEnglishDigits(order.altPhone || order.alternativePhone),
+                ],
+                ['Email', order.email],
+                ['Full Address', order.address],
+                ['District', row.district],
+                ['Area / Thana', order.area || order.thana],
+                ['Note', notePreview],
+                ['Previous Orders', String(previousOrders)],
+              ]}
+            />
+          </Section>
+
+          {/* 3. Order Status & Courier Tracking (Top-to-Bottom Courier Style) */}
+          <Section
+            title="Order & Courier Tracking"
+            right={
+              <div className="flex flex-wrap items-center gap-1.5">
+                {nextOrder.map(s => {
+                  const why = canOrderMove(row, s);
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      disabled={Boolean(why)}
+                      title={why || ''}
+                      onClick={() => api.moveOrder(row, s)}
+                      className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40"
+                    >
+                      → {labelOf(ORDER_STATUSES, s)}
+                    </button>
+                  );
+                })}
+                {ORDER_FLOW[row.orderStatus]?.includes('cancelled') && (
+                  <button
+                    type="button"
+                    disabled={Boolean(cancelReason)}
+                    title={cancelReason || ''}
+                    onClick={askCancel}
+                    className="rounded-lg border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"
+                  >
+                    Cancel
+                  </button>
+                )}
+                {order.paymentMethod !== 'cod' &&
+                  row.paymentStatus === 'unpaid' && (
+                    <button
+                      type="button"
+                      onClick={() => api.verifyPayment(row)}
+                      className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
+                    >
+                      Verify Payment
+                    </button>
+                  )}
+                {order.paymentMethod === 'cod' &&
+                  row.orderStatus === 'delivered' &&
+                  ['unpaid', 'partial'].includes(row.paymentStatus) && (
+                    <button
+                      type="button"
+                      onClick={() => api.markCod(row)}
+                      className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
+                    >
+                      COD Collected
+                    </button>
+                  )}
+              </div>
+            }
+          >
+            {/* Visual Top-to-Bottom Stage Pipeline + Courier Updates */}
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
+              {/* Left: Top-to-Bottom Courier Timeline & Notes */}
+              <div>
+                <div className="mb-4 flex flex-wrap items-center gap-1.5">
+                  {stageSteps.map((stage, idx) => {
+                    const isCancelled = row.orderStatus === 'cancelled';
+                    const done = !isCancelled && idx <= stageIdx;
+                    const current = !isCancelled && idx === stageIdx;
+                    return (
+                      <span
+                        key={stage}
+                        className={`rounded-md px-2.5 py-1 text-xs font-semibold ${
+                          current
+                            ? 'bg-blue-600 text-white'
+                            : done
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-slate-50 text-slate-400 border border-slate-200'
+                        }`}
+                      >
+                        {labelOf(ORDER_STATUSES, stage)}
+                      </span>
+                    );
+                  })}
+                  {row.orderStatus === 'cancelled' && (
+                    <span className="rounded-md bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 border border-rose-200">
+                      Cancelled
+                    </span>
+                  )}
+                </div>
+
+                {/* Vertical Courier-style feed from top down */}
+                <ol className="relative space-y-4 border-l-2 border-slate-200 pl-5">
+                  {timeline.map((event, idx) => {
+                    const isLatest = idx === timeline.length - 1;
+                    return (
+                      <li key={idx} className="relative">
+                        <span
+                          className={`absolute -left-[25px] top-1 h-3 w-3 rounded-full border-2 border-white ${
+                            isLatest ? 'bg-blue-600' : 'bg-emerald-500'
+                          }`}
+                        />
+                        <div className="rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-semibold text-slate-900">
+                              {event.label}
+                            </p>
+                            <span className="text-[11px] text-slate-400">
+                              {fmtDateTime(event.at)}
+                            </span>
+                          </div>
+                          {event.note && (
+                            <p className="mt-1 text-xs text-slate-600">
+                              {event.note}
+                            </p>
+                          )}
+                          {event.by && (
+                            <p className="mt-0.5 text-[11px] text-slate-400">
+                              By: {event.by}
+                            </p>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ol>
+
+                {/* Add Note directly into courier timeline */}
+                <form onSubmit={handleAddNote} className="mt-4 flex gap-2">
+                  <input
+                    type="text"
+                    value={courierNote}
+                    onChange={e => setCourierNote(e.target.value)}
+                    placeholder="Add courier or order update note..."
+                    className="h-9 flex-1 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Add Note
+                  </button>
+                </form>
+              </div>
+
+              {/* Right: Courier & Staff Details */}
+              <form
+                onSubmit={handleSaveCourier}
+                className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4 text-xs"
+              >
+                <p className="font-semibold text-slate-800">Courier Details</p>
+                <Field label="Courier">
+                  <select
+                    value={courierForm.courier}
+                    onChange={e =>
+                      setCourierForm(prev => ({
+                        ...prev,
+                        courier: e.target.value,
+                      }))
+                    }
+                    className={inputCls}
+                  >
+                    <option value="">Select courier</option>
+                    {COURIERS.map(c => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <TextInput
+                  label="Consignment ID"
+                  value={courierForm.consignmentId}
+                  onChange={v =>
+                    setCourierForm(prev => ({ ...prev, consignmentId: v }))
+                  }
+                  placeholder="Courier consignment ID"
+                />
+                <TextInput
+                  label="Tracking / Courier Status"
+                  value={courierForm.courierStatus}
+                  onChange={v =>
+                    setCourierForm(prev => ({ ...prev, courierStatus: v }))
+                  }
+                  placeholder="e.g. In transit at hub"
+                />
+                <Field label="Assigned Staff">
+                  <select
+                    value={row.staff}
+                    onChange={e =>
+                      api.setMeta(
+                        row,
+                        { assignedStaff: e.target.value },
+                        `Assigned to ${e.target.value || 'nobody'}`,
+                      )
+                    }
+                    className={inputCls}
+                  >
+                    <option value="">Unassigned</option>
+                    {staffOptions.map(s => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <button
+                  type="submit"
+                  className={`${btnPrimary} w-full`}
+                >
+                  <FiSend size={13} /> Save Courier Info
+                </button>
+              </form>
+            </div>
+          </Section>
+
+          {/* Optional Failed Delivery / Return Section */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setShowIssues(v => !v)}
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800"
+            >
+              {showIssues
+                ? 'Hide failed delivery & returns'
+                : 'Manage failed delivery or return'}
+            </button>
+            {showIssues && (
+              <div className="mt-3">
+                <IssuesTab
+                  key={`${row.id}-${row.deliveryStatus}-${m.returnInfo?.status || 'none'}`}
+                  row={row}
+                  api={api}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -1713,7 +1575,7 @@ function OrderDetailsModal({ row, rows, books, staffOptions, api, onClose }) {
 /* Bulk actions                                                        */
 /* ------------------------------------------------------------------ */
 
-function BulkDialog({ def, selected, staffOptions, api, onCancel, onDone }) {
+function BulkDialog({ def, selected, staffOptions, onCancel, onDone }) {
   const [value, setValue] = useState('');
   const [note, setNote] = useState('');
   const checked = selected.map(r => ({
@@ -1846,10 +1708,7 @@ function Orders() {
   const [sort, setSort] = useState({ key: 'date', dir: 'desc' });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [visibleCols, setVisibleCols] = useState(() =>
-    COLUMNS.filter(c => c.show).map(c => c.id),
-  );
-  const [colMenu, setColMenu] = useState(false);
+  const [filterMenu, setFilterMenu] = useState(false);
   const [bulkMenu, setBulkMenu] = useState(false);
   const [selected, setSelected] = useState(() => new Set());
   const [detailId, setDetailId] = useState(null);
@@ -1858,8 +1717,11 @@ function Orders() {
 
   const today = todayLocal();
   const rows = useMemo(
-    () => orders.map(o => buildRow(o, store.meta[o.id] || {})),
-    [orders, store.meta],
+    () =>
+      orders
+        .filter(o => o.orderType !== 'counter' && !o.shopName)
+        .map(o => buildRow(o, store.meta[o.id] || {}, books)),
+    [orders, store.meta, books],
   );
 
   const staffOptions = useMemo(() => {
@@ -1898,9 +1760,17 @@ function Orders() {
     if (why) return { ok: false, message: why };
     const sync = syncContext(row, contextOrderTarget(to));
     if (!sync.ok) return sync;
+    const deliveryPatch =
+      to === 'approved'
+        ? { deliveryStatus: 'ready_to_ship' }
+        : to === 'shipping'
+          ? { deliveryStatus: 'shipped', shipDate: row.m.shipDate || today }
+          : to === 'delivered'
+            ? { deliveryStatus: 'delivered' }
+            : {};
     writeMeta(
       row.id,
-      { orderStatus: to },
+      { orderStatus: to, ...deliveryPatch },
       { key: `o:${to}`, label: ORDER_EVENT[to], note },
       `Order status → ${labelOf(ORDER_STATUSES, to)}`,
     );
@@ -1929,17 +1799,48 @@ function Orders() {
     return res;
   };
 
+  const markPrinted = (list, label) => {
+    const at = new Date().toISOString();
+    setStore(prev => {
+      const nextMeta = { ...prev.meta };
+      const nextAudit = [...prev.audit];
+      list.forEach(item => {
+        const cur = nextMeta[item.id] || {};
+        nextMeta[item.id] = {
+          ...cur,
+          printed: true,
+          printedAt: at,
+          timeline: [...(cur.timeline || []), { key: 'print', label, at, by: actor, note: '' }],
+        };
+        nextAudit.unshift({ at, by: actor, orderId: item.id, action: label });
+      });
+      return { meta: nextMeta, audit: nextAudit.slice(0, 500) };
+    });
+  };
+
   const api = {
     audit: store.audit,
     askConfirm: setConfirm,
     moveOrder: (row, to, note) => report(coreMoveOrder(row, to, note)),
     moveDelivery: (row, to, note) => report(coreMoveDelivery(row, to, note)),
-    printInvoices: list =>
-      openPrint(list.map(invoiceHtml).join(''), 'Invoices'),
+    addTrackingNote: (row, note) => {
+      writeMeta(
+        row.id,
+        {},
+        { key: 'note', label: 'Courier / Order Update', note },
+        `Note added: ${note}`,
+      );
+      toast.success('Update added');
+    },
+    printInvoices: list => {
+      markPrinted(list, 'Invoice printed');
+      openPrint(list.map(invoiceHtml).join(''), 'Invoices');
+    },
     printLabels: list => {
       const online = list.filter(r => !r.isCounter);
       if (online.length === 0)
         return toast.error('Counter sales do not need shipping labels');
+      markPrinted(online, 'Shipping label printed');
       openPrint(online.map(labelHtml).join(''), 'Shipping labels');
     },
     setMeta: (row, patch, action) => {
@@ -2109,16 +2010,15 @@ function Orders() {
   };
 
   /* ----- summary cards ----- */
-  const inTransit = ['shipped', 'in_transit', 'out_for_delivery'];
   const QUICK = {
     all: () => true,
     new: r => r.orderStatus === 'new',
-    pending: r => ['new', 'confirmed'].includes(r.orderStatus),
-    processing: r => r.orderStatus === 'processing',
-    ready: r => r.deliveryStatus === 'ready_to_ship',
-    transit: r => inTransit.includes(r.deliveryStatus),
+    pending: r => r.orderStatus === 'approved',
+    processing: r => r.orderStatus === 'approved',
+    ready: r => r.orderStatus === 'approved',
+    transit: r => r.orderStatus === 'shipping',
     deliveredToday: r =>
-      r.deliveryStatus === 'delivered' && r.deliveredDay === today,
+      r.orderStatus === 'delivered' && r.deliveredDay === today,
     cancelled: r => r.orderStatus === 'cancelled',
     failed: r => r.deliveryStatus === 'delivery_failed',
     returned: r => r.deliveryStatus === 'returned',
@@ -2228,7 +2128,7 @@ function Orders() {
         return false;
       if (filters.delivery && r.deliveryStatus !== filters.delivery)
         return false;
-      if (filters.payment && r.paymentStatus !== filters.payment) return false;
+      if (filters.payment && r.paymentMethod !== filters.payment) return false;
       if (filters.courier && r.courier !== filters.courier) return false;
       if (filters.district && r.district !== filters.district) return false;
       if (filters.staff && r.staff !== filters.staff) return false;
@@ -2248,11 +2148,16 @@ function Orders() {
           return r.copies;
         case 'amount':
           return r.payable;
+        case 'netProfit':
+          return r.netProfit;
         default:
           return r.ts;
       }
     };
     return [...list].sort((a, b) => {
+      if (Boolean(a.pinned) !== Boolean(b.pinned)) {
+        return a.pinned ? -1 : 1;
+      }
       const x = valueOf(a);
       const y = valueOf(b);
       const res = x < y ? -1 : x > y ? 1 : 0;
@@ -2267,12 +2172,13 @@ function Orders() {
   const currentPage = Math.min(page, totalPages);
   const start = (currentPage - 1) * pageSize;
   const pageRows = filtered.slice(start, start + pageSize);
-  const cols = COLUMNS.filter(c => visibleCols.includes(c.id));
+  const cols = COLUMNS;
 
-  const optionsFrom = fn =>
-    [...new Set(rows.map(fn).filter(Boolean))]
-      .sort()
-      .map(v => ({ value: v, label: v }));
+  const activeFilterCount = [
+    filters.orderStatus,
+    filters.delivery,
+    filters.payment,
+  ].filter(Boolean).length;
   const hasFilters = Boolean(
     search || quick !== 'all' || Object.values(filters).some(Boolean),
   );
@@ -2314,28 +2220,22 @@ function Orders() {
     r.orderStatus === 'cancelled' ? 'Order is cancelled' : null;
   const BULK = [
     {
-      id: 'confirm',
-      label: 'Confirm orders',
-      check: r => canOrderMove(r, 'confirmed'),
-      apply: r => coreMoveOrder(r, 'confirmed'),
+      id: 'approve',
+      label: 'Approve orders',
+      check: r => canOrderMove(r, 'approved'),
+      apply: r => coreMoveOrder(r, 'approved'),
     },
     {
-      id: 'processing',
-      label: 'Start processing',
-      check: r => canOrderMove(r, 'processing'),
-      apply: r => coreMoveOrder(r, 'processing'),
+      id: 'shipping',
+      label: 'Move to Shipping',
+      check: r => canOrderMove(r, 'shipping'),
+      apply: r => coreMoveOrder(r, 'shipping', 'Handed over to courier'),
     },
     {
-      id: 'ready',
-      label: 'Mark ready to ship',
-      check: r => canDeliveryMove(r, 'ready_to_ship'),
-      apply: r => coreMoveDelivery(r, 'ready_to_ship'),
-    },
-    {
-      id: 'ship',
-      label: 'Create shipments (manual)',
-      check: r => canDeliveryMove(r, 'shipped'),
-      apply: r => coreMoveDelivery(r, 'shipped', 'Manual shipment'),
+      id: 'delivered',
+      label: 'Mark Delivered',
+      check: r => canOrderMove(r, 'delivered'),
+      apply: r => coreMoveOrder(r, 'delivered'),
     },
     {
       id: 'staff',
@@ -2385,51 +2285,81 @@ function Orders() {
 
   const detailRow = rows.find(r => r.id === detailId) ?? null;
 
+  const togglePin = row => {
+    const nextPinned = !row.pinned;
+    writeMeta(
+      row.id,
+      { pinned: nextPinned },
+      null,
+      nextPinned ? 'Order pinned' : 'Order unpinned',
+    );
+    toast.success(nextPinned ? 'Order pinned' : 'Order unpinned');
+  };
+
   /* ----- cell rendering ----- */
   const renderCell = (id, r) => {
     switch (id) {
       case 'id':
-        return <span className="font-semibold text-slate-800">{r.id}</span>;
+        return (
+          <span className="whitespace-nowrap font-semibold text-slate-800">
+            {r.id}
+          </span>
+        );
       case 'channel':
         return (
-          <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
+          <span className="inline-block whitespace-nowrap rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-600">
             {labelOf(CHANNELS, r.channel)}
           </span>
         );
       case 'customer':
         return (
-          <div>
-            <p className="font-medium text-slate-800">
-              {r.order.shopName || r.order.customerName}
-            </p>
-            <p className="text-xs text-slate-400">{r.order.phone}</p>
-          </div>
+          <span className="block max-w-[180px] truncate whitespace-nowrap font-medium text-slate-800">
+            {r.order.shopName || r.order.customerName}
+          </span>
         );
       case 'phone':
-        return <span className="text-slate-600">{r.order.phone || '—'}</span>;
+        return (
+          <span className="whitespace-nowrap text-slate-600">
+            {toEnglishDigits(r.order.phone) || '—'}
+          </span>
+        );
       case 'items':
         return (
-          <span className="text-slate-600">
+          <span className="whitespace-nowrap text-slate-600">
             {r.uniqueBooks} books · {r.copies} copies
           </span>
         );
       case 'amount':
         return (
-          <span className="font-semibold text-slate-900">
+          <span className="whitespace-nowrap font-semibold text-slate-900">
             {formatCurrency(r.payable)}
           </span>
         );
       case 'charge':
         return (
-          <span className="text-slate-600">{formatCurrency(r.charge)}</span>
+          <span className="whitespace-nowrap text-slate-600">
+            {formatCurrency(r.charge)}
+          </span>
+        );
+      case 'netProfit':
+        return (
+          <span
+            className={`whitespace-nowrap font-semibold ${
+              r.netProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'
+            }`}
+          >
+            {formatCurrency(r.netProfit)}
+          </span>
         );
       case 'payment':
-        return <Pill list={PAYMENT_STATUSES} value={r.paymentStatus} />;
+        return <Pill list={PAYMENT_METHODS} value={r.paymentMethod} />;
       case 'orderStatus':
         return <Pill list={ORDER_STATUSES} value={r.orderStatus} />;
       case 'delivery':
         return r.isCounter ? (
-          <span className="text-xs text-slate-400">Counter handover</span>
+          <span className="whitespace-nowrap text-xs text-slate-400">
+            Counter handover
+          </span>
         ) : (
           <Pill list={DELIVERY_STATUSES} value={r.deliveryStatus} />
         );
@@ -2440,17 +2370,21 @@ function Orders() {
           </span>
         );
       case 'courier':
-        return <span className="text-slate-600">{r.courier || '—'}</span>;
+        return (
+          <span className="whitespace-nowrap text-slate-600">
+            {r.courier || '—'}
+          </span>
+        );
       default:
         return null;
     }
   };
 
   return (
-    <>
+    <div data-no-translate="true">
       <PageHeader
-        title="Orders Management"
-        description="Process online and counter orders, manage shipments, returns and invoices."
+        title="Online Orders"
+        description="Manage website orders, invoices, printing, and courier status."
       />
 
       {/* Summary cards */}
@@ -2527,39 +2461,64 @@ function Orders() {
             <div className="relative">
               <button
                 type="button"
-                onClick={() => setColMenu(o => !o)}
+                onClick={() => setFilterMenu(o => !o)}
                 className={`${btnOutline} !py-1.5`}
               >
-                <FiColumns size={14} /> Columns
+                <FiSliders size={14} /> Filters
+                {activeFilterCount > 0 && (
+                  <span className="rounded-full bg-blue-600 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    {activeFilterCount}
+                  </span>
+                )}
               </button>
-              {colMenu && (
+              {filterMenu && (
                 <>
                   <div
                     className="fixed inset-0 z-20"
-                    onClick={() => setColMenu(false)}
+                    onClick={() => setFilterMenu(false)}
                   />
-                  <div className="absolute right-0 z-30 mt-1 w-52 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">
-                    {COLUMNS.map(c => (
-                      <label
-                        key={c.id}
-                        className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+                  <div className="absolute right-0 z-30 mt-1 w-64 space-y-3 rounded-xl border border-slate-200 bg-white p-3.5 shadow-lg">
+                    <Field label="Order Status">
+                      <FilterSelect
+                        label="Order Status"
+                        value={filters.orderStatus}
+                        onChange={setFilter('orderStatus')}
+                        options={ORDER_STATUSES}
+                      />
+                    </Field>
+                    <Field label="Delivery Status">
+                      <FilterSelect
+                        label="Delivery Status"
+                        value={filters.delivery}
+                        onChange={setFilter('delivery')}
+                        options={DELIVERY_STATUSES}
+                      />
+                    </Field>
+                    <Field label="Payment">
+                      <FilterSelect
+                        label="Payment"
+                        value={filters.payment}
+                        onChange={setFilter('payment')}
+                        options={PAYMENT_METHODS}
+                      />
+                    </Field>
+                    {activeFilterCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFilters(prev => ({
+                            ...prev,
+                            orderStatus: '',
+                            delivery: '',
+                            payment: '',
+                          }));
+                          setFilterMenu(false);
+                        }}
+                        className="w-full rounded-lg border border-slate-200 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-50"
                       >
-                        <input
-                          type="checkbox"
-                          checked={visibleCols.includes(c.id)}
-                          onChange={() =>
-                            setVisibleCols(prev =>
-                              prev.includes(c.id)
-                                ? prev.length > 1
-                                  ? prev.filter(x => x !== c.id)
-                                  : prev
-                                : [...prev, c.id],
-                            )
-                          }
-                        />
-                        {c.label}
-                      </label>
-                    ))}
+                        Reset Filters
+                      </button>
+                    )}
                   </div>
                 </>
               )}
@@ -2590,51 +2549,6 @@ function Orders() {
             >
               <FiPrinter size={14} /> Print report
             </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <FilterSelect
-              label="Channels"
-              value={filters.channel}
-              onChange={setFilter('channel')}
-              options={CHANNELS}
-            />
-            <FilterSelect
-              label="Order Status"
-              value={filters.orderStatus}
-              onChange={setFilter('orderStatus')}
-              options={ORDER_STATUSES}
-            />
-            <FilterSelect
-              label="Delivery Status"
-              value={filters.delivery}
-              onChange={setFilter('delivery')}
-              options={DELIVERY_STATUSES}
-            />
-            <FilterSelect
-              label="Payment Status"
-              value={filters.payment}
-              onChange={setFilter('payment')}
-              options={PAYMENT_STATUSES}
-            />
-            <FilterSelect
-              label="Couriers"
-              value={filters.courier}
-              onChange={setFilter('courier')}
-              options={COURIERS.map(c => ({ value: c, label: c }))}
-            />
-            <FilterSelect
-              label="Districts"
-              value={filters.district}
-              onChange={setFilter('district')}
-              options={optionsFrom(r => r.district)}
-            />
-            <FilterSelect
-              label="Staff"
-              value={filters.staff}
-              onChange={setFilter('staff')}
-              options={staffOptions.map(s => ({ value: s, label: s }))}
-            />
           </div>
 
           <div className="flex flex-wrap items-end gap-2">
@@ -2794,13 +2708,21 @@ function Orders() {
                 {cols.map(c => (
                   <th
                     key={c.id}
-                    className={`whitespace-nowrap px-4 py-3 ${c.align === 'right' ? 'text-right' : ''}`}
+                    className={`whitespace-nowrap px-4 py-3 ${
+                      c.align === 'center'
+                        ? 'text-center'
+                        : c.align === 'right'
+                          ? 'text-right'
+                          : 'text-left'
+                    }`}
                   >
                     {c.sort ? (
                       <button
                         type="button"
                         onClick={() => toggleSort(c.sort)}
-                        className="inline-flex items-center gap-1 hover:text-slate-800"
+                        className={`inline-flex items-center gap-1 hover:text-slate-800 ${
+                          c.align === 'center' ? 'justify-center' : ''
+                        }`}
                       >
                         {c.label}
                         <span className="flex flex-col leading-none">
@@ -2827,7 +2749,9 @@ function Orders() {
                     )}
                   </th>
                 ))}
-                <th className="px-4 py-3 text-right">Actions</th>
+                <th className="whitespace-nowrap px-4 py-3 text-right">
+                  Actions
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -2835,9 +2759,18 @@ function Orders() {
                 <tr
                   key={r.id}
                   onClick={() => setDetailId(r.id)}
-                  className="cursor-pointer text-sm transition hover:bg-slate-50/60"
+                  className={`cursor-pointer text-sm transition ${
+                    r.pinned
+                      ? 'bg-amber-50/85 hover:bg-amber-100/75'
+                      : 'bg-white hover:bg-slate-50/70'
+                  }`}
                 >
-                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                  <td
+                    className={`whitespace-nowrap px-4 py-3 ${
+                      r.pinned ? 'border-l-4 border-l-amber-400' : ''
+                    }`}
+                    onClick={e => e.stopPropagation()}
+                  >
                     <input
                       type="checkbox"
                       aria-label={`Select ${r.id}`}
@@ -2848,28 +2781,62 @@ function Orders() {
                   {cols.map(c => (
                     <td
                       key={c.id}
-                      className={`px-4 py-3 ${c.align === 'right' ? 'text-right' : ''}`}
+                      className={`whitespace-nowrap px-4 py-3 ${
+                        c.align === 'center'
+                          ? 'text-center'
+                          : c.align === 'right'
+                            ? 'text-right'
+                            : 'text-left'
+                      }`}
                     >
                       {renderCell(c.id, r)}
                     </td>
                   ))}
-                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                    <div className="flex items-center justify-end gap-1">
+                  <td
+                    className="whitespace-nowrap px-4 py-3"
+                    onClick={e => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                      <button
+                        type="button"
+                        title={r.pinned ? 'Unpin order' : 'Pin order'}
+                        aria-label={r.pinned ? 'Unpin order' : 'Pin order'}
+                        onClick={() => togglePin(r)}
+                        className={`rounded-lg p-1.5 transition ${
+                          r.pinned
+                            ? 'text-amber-600 hover:bg-amber-200/60'
+                            : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+                        }`}
+                      >
+                        <FiBookmark
+                          size={14}
+                          className={r.pinned ? 'fill-current' : ''}
+                        />
+                      </button>
                       <button
                         type="button"
                         onClick={() => setDetailId(r.id)}
-                        className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
+                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-200"
                       >
                         <FiEye size={13} /> View
                       </button>
                       <button
                         type="button"
-                        title="Print invoice"
+                        title={
+                          r.printed
+                            ? 'Printed — Click to print again'
+                            : 'Unprinted — Print invoice'
+                        }
                         aria-label="Print invoice"
                         onClick={() => api.printInvoices([r])}
-                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium transition ${
+                          r.printed
+                            ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-700'
+                        }`}
                       >
-                        <FiPrinter size={14} />
+                        <FiPrinter size={13} />
+                        <span>{r.printed ? 'Printed' : 'Print'}</span>
                       </button>
                       {!r.isCounter && (
                         <button
@@ -2897,50 +2864,17 @@ function Orders() {
           )}
         </div>
 
-        {/* Pagination */}
-        <div className="flex flex-col gap-3 border-t border-slate-100 p-4 text-sm text-slate-500 lg:flex-row lg:items-center lg:justify-between lg:px-5">
-          <p>
-            Showing {filtered.length === 0 ? 0 : start + 1} to{' '}
-            {Math.min(start + pageSize, filtered.length)} of {filtered.length}{' '}
-            orders
-          </p>
-          <label className="flex items-center gap-2">
-            Show
-            <select
-              value={pageSize}
-              onChange={e => setPageSize(Number(e.target.value))}
-              className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-500"
-            >
-              {PAGE_SIZES.map(s => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            per page
-          </label>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              disabled={currentPage === 1}
-              onClick={() => setPage(currentPage - 1)}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Previous
-            </button>
-            <span className="px-2 text-xs">
-              Page {currentPage} of {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={currentPage === totalPages}
-              onClick={() => setPage(currentPage + 1)}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Next
-            </button>
-          </div>
-        </div>
+        {/* Shared Pagination */}
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={filtered.length}
+          pageSize={pageSize}
+          pageSizeOptions={PAGE_SIZES}
+          itemLabel="orders"
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       </section>
 
       {detailRow && (
@@ -2984,7 +2918,7 @@ function Orders() {
           <p>{confirm.body}</p>
         </ConfirmDialog>
       )}
-    </>
+    </div>
   );
 }
 

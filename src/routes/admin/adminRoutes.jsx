@@ -3,12 +3,15 @@ import { Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from '../common/ProtectedRoute'
 
 const UsersManagement = lazy(() => import('../../pages/dashboard/admin/UsersManagement'))
+const EmployeeManagement = lazy(() => import('../../pages/dashboard/admin/EmployeeManagement'))
 const ShopManagement = lazy(() => import('../../pages/dashboard/admin/ShopManagement'))
 const PublishersManagement = lazy(() => import('../../pages/dashboard/admin/PublishersManagement'))
 const AuthorManagement = lazy(() => import('../../pages/dashboard/admin/AuthorManagement'))
 const TotalCost = lazy(() => import('../../pages/dashboard/admin/TotalCost'))
+const MagazineManagement = lazy(() => import('../../pages/dashboard/admin/MagazineManagement'))
 const Reports = lazy(() => import('../../pages/dashboard/admin/Reports'))
 const DashboardSection = lazy(() => import('../../pages/dashboard/common/DashboardSection'))
+const ExpenseProfiles = lazy(() => import('../../pages/dashboard/common/ExpenseProfiles'))
 
 export const adminRoutes = (
   <>
@@ -69,10 +72,42 @@ export const adminRoutes = (
       }
     />
     <Route
+      path="/dashboard/all-users/employees"
+      element={
+        <ProtectedRoute allowedRoles={['admin']}>
+          <EmployeeManagement />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/dashboard/all-users/employees/:employeeName"
+      element={
+        <ProtectedRoute allowedRoles={['admin']}>
+          <EmployeeManagement />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/dashboard/all-users/expense-profiles"
+      element={
+        <ProtectedRoute allowedRoles={['admin']}>
+          <ExpenseProfiles />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/dashboard/all-users/expense-profiles/:profileSlug"
+      element={
+        <ProtectedRoute allowedRoles={['admin']}>
+          <ExpenseProfiles />
+        </ProtectedRoute>
+      }
+    />
+    <Route
       path="/dashboard/all-users/roles"
       element={
         <ProtectedRoute allowedRoles={['admin']}>
-          <UsersManagement scope="roles" />
+          <Navigate to="/dashboard/all-users/employees" replace />
         </ProtectedRoute>
       }
     />
@@ -152,7 +187,7 @@ export const adminRoutes = (
       path="/dashboard/magazine"
       element={
         <ProtectedRoute allowedRoles={['admin']}>
-          <DashboardSection title="Magazine" />
+          <MagazineManagement />
         </ProtectedRoute>
       }
     />

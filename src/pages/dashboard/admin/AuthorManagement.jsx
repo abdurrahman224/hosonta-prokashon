@@ -11,6 +11,7 @@ import {
   FiEdit2,
   FiEye,
   FiFileText,
+  FiPrinter,
   FiUser,
   FiUsers,
   FiX,
@@ -23,6 +24,7 @@ import { useAuth } from '../../../context/useAuth';
 import authors from '../../../data/authors';
 import { getStoredBooks, saveStoredBooks } from '../../../utils/authorStorage';
 import {
+  addDirectAuthorPayment,
   getAllPaymentRequests,
   updatePaymentRequestStatus,
 } from '../../../utils/paymentStorage';
@@ -191,8 +193,16 @@ export default function AuthorManagement() {
   const [payoutRequests, setPayoutRequests] = useState(getAllPaymentRequests);
   const [payoutFilterTab, setPayoutFilterTab] = useState('all');
   const [selectedPayout, setSelectedPayout] = useState(null);
+  const [invoicePayout, setInvoicePayout] = useState(null);
   const [payoutActionModal, setPayoutActionModal] = useState(null); // { type: 'approve' | 'reject' | 'pay', request }
   const [payoutAdminNote, setPayoutAdminNote] = useState('');
+  const [directPayModalOpen, setDirectPayModalOpen] = useState(false);
+  const [directPayForm, setDirectPayForm] = useState({
+    amount: '',
+    method: 'Cash',
+    account: '',
+    note: '',
+  });
 
   const reloadPayouts = () => setPayoutRequests(getAllPaymentRequests());
 
@@ -436,11 +446,39 @@ export default function AuthorManagement() {
   }, [payoutRequests]);
 
   const handlePayoutStatusChange = (requestId, newStatus, note = '') => {
-    updatePaymentRequestStatus(requestId, newStatus, note);
+    const normalized = newStatus?.toLowerCase() === 'completed' ? 'Paid' : newStatus;
+    const updatedList = updatePaymentRequestStatus(requestId, normalized, note);
     reloadPayouts();
     setPayoutActionModal(null);
     setPayoutAdminNote('');
-    toast.success(`Payment request marked as ${newStatus}.`);
+    toast.success(`Payment request marked as ${normalized}.`);
+    if (normalized?.toLowerCase() === 'paid') {
+      const targetReq = updatedList.find(r => r.id === requestId);
+      if (targetReq) setInvoicePayout(targetReq);
+    }
+  };
+
+  const handleDirectAuthorPaySubmit = e => {
+    e.preventDefault();
+    const numAmt = Number(directPayForm.amount);
+    if (!currentAuthor || !numAmt || numAmt <= 0) {
+      toast.error('Please enter a valid payment amount.');
+      return;
+    }
+    const created = addDirectAuthorPayment({
+      userId: currentAuthor.id,
+      authorName: currentAuthor.name,
+      authorEmail: currentAuthor.email || '',
+      amount: numAmt,
+      method: directPayForm.method,
+      account: directPayForm.account || 'Direct Payout',
+      note: directPayForm.note || 'Royalty payout by Admin',
+    });
+    reloadPayouts();
+    setDirectPayModalOpen(false);
+    setDirectPayForm({ amount: '', method: 'Cash', account: '', note: '' });
+    toast.success(`${formatCurrency(numAmt)} payment recorded for ${currentAuthor.name}.`);
+    setInvoicePayout(created);
   };
 
   const getPayoutStatusSelectClass = val => {
@@ -799,7 +837,20 @@ export default function AuthorManagement() {
               )}
             </div>
 
-            <div className="flex shrink-0 justify-end border-t border-slate-100 px-4 py-3 sm:px-6 sm:py-4">
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-100 px-4 py-3 sm:px-6 sm:py-4">
+              <button
+                type="button"
+                onClick={() => {
+                  const target = selectedPayout;
+                  setSelectedPayout(null);
+                  setInvoicePayout(target);
+                }}
+                title="Print Invoice"
+                aria-label="Print Invoice"
+                className="p-2 text-slate-600 hover:text-dark transition"
+              >
+                <FiPrinter size={17} />
+              </button>
               <button
                 type="button"
                 onClick={() => setSelectedPayout(null)}
@@ -937,6 +988,216 @@ export default function AuthorManagement() {
           </div>
         </div>
       )}
+      {/* MODAL: Printable Author Payment Invoice */}
+      {invoicePayout && (
+        <div
+          onClick={() => setInvoicePayout(null)}
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 p-4 print:static print:bg-white print:p-0"
+        >
+          <style>{`
+            @media print {
+              body * { visibility: hidden !important; }
+              #author-payment-invoice, #author-payment-invoice * { visibility: visible !important; }
+              #author-payment-invoice {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100% !important;
+                padding: 12mm !important;
+                background: white !important;
+              }
+              @page { margin: 10mm; size: A4 portrait; }
+            }
+          `}</style>
+          <div
+            onClick={e => e.stopPropagation()}
+            className="w-full max-w-lg rounded-xl bg-white shadow-xl print:rounded-none print:shadow-none"
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 print:hidden">
+              <span className="text-sm font-bold text-slate-800">Author Payment Invoice</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  title="Print Invoice"
+                  aria-label="Print Invoice"
+                  className="p-1.5 text-slate-700 hover:text-dark transition"
+                >
+                  <FiPrinter size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInvoicePayout(null)}
+                  title="Close"
+                  aria-label="Close"
+                  className="p-1.5 text-slate-400 hover:text-dark transition"
+                >
+                  <FiX size={18} />
+                </button>
+              </div>
+            </div>
+
+            <div id="author-payment-invoice" className="p-6 text-xs text-slate-800 space-y-4">
+              <div className="border-b border-slate-300 pb-3 text-center">
+                <h2 className="font-heading text-xl font-bold text-slate-900">
+                  Hosonta Prokashon
+                </h2>
+                <p className="text-[11px] text-slate-500">
+                  38/2 Mannan Market, Banglabazar, Dhaka-1100 • Hotline: 01628-037591
+                </p>
+                <p className="mt-1.5 font-bold uppercase tracking-wider text-slate-800">
+                  Author Royalty Payment Invoice
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <p><strong>Author:</strong> {invoicePayout.authorName}</p>
+                  {invoicePayout.authorEmail && (
+                    <p><strong>Email:</strong> {invoicePayout.authorEmail}</p>
+                  )}
+                  <p><strong>Account:</strong> {invoicePayout.account || '—'}</p>
+                </div>
+                <div className="space-y-1 text-right">
+                  <p><strong>Invoice No:</strong> INV-{invoicePayout.id}</p>
+                  <p>
+                    <strong>Payment Date:</strong>{' '}
+                    {formatDate(invoicePayout.reviewedAt || invoicePayout.requestDate || invoicePayout.requestedAt)}
+                  </p>
+                  <p><strong>Method:</strong> {invoicePayout.method || 'Cash'}</p>
+                  <p><strong>Status:</strong> {invoicePayout.status || 'Paid'}</p>
+                </div>
+              </div>
+
+              <table className="w-full border border-slate-200 text-left">
+                <thead className="border-b border-slate-200 bg-white">
+                  <tr className="whitespace-nowrap">
+                    <th className="px-3 py-2 font-semibold">Description</th>
+                    <th className="px-3 py-2 text-right font-semibold">Amount</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200">
+                  <tr>
+                    <td className="px-3 py-2">
+                      Royalty Settlement ({invoicePayout.id})
+                      {invoicePayout.adminNote && (
+                        <span className="block text-[11px] text-slate-500">
+                          Ref: {invoicePayout.adminNote}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right font-bold text-emerald-700">
+                      {formatCurrency(invoicePayout.amount)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <div className="grid grid-cols-2 gap-6 pt-8 text-center text-[11px] text-slate-500">
+                <div className="border-t border-dashed border-slate-300 pt-1">
+                  Author Signature
+                </div>
+                <div className="border-t border-dashed border-slate-300 pt-1">
+                  Authorized Signature
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: Direct Author Payment */}
+      {directPayModalOpen && currentAuthor && (
+        <div
+          onClick={() => setDirectPayModalOpen(false)}
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4"
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="w-full max-w-md rounded-xl bg-white p-5 sm:p-6 shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="font-heading text-base font-bold text-slate-900">
+                Pay Author — {currentAuthor.name}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setDirectPayModalOpen(false)}
+                className="p-1 text-slate-400 hover:text-dark"
+                aria-label="Close"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleDirectAuthorPaySubmit} className="mt-4 space-y-3 text-xs">
+              <div>
+                <label className="mb-1 block font-semibold text-slate-700">
+                  Payment Amount (৳) *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={directPayForm.amount}
+                  onChange={e => setDirectPayForm(p => ({ ...p, amount: e.target.value }))}
+                  placeholder={currentAuthor.totalDue > 0 ? String(currentAuthor.totalDue) : '5000'}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Method</label>
+                  <select
+                    value={directPayForm.method}
+                    onChange={e => setDirectPayForm(p => ({ ...p, method: e.target.value }))}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-primary"
+                  >
+                    <option value="Cash">Cash</option>
+                    <option value="bKash">bKash</option>
+                    <option value="Nagad">Nagad</option>
+                    <option value="Bank transfer">Bank transfer</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block font-semibold text-slate-700">Account / No.</label>
+                  <input
+                    type="text"
+                    value={directPayForm.account}
+                    onChange={e => setDirectPayForm(p => ({ ...p, account: e.target.value }))}
+                    placeholder="Account or Cash"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900 outline-none focus:border-primary"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block font-semibold text-slate-700">Note / TrxID</label>
+                <input
+                  type="text"
+                  value={directPayForm.note}
+                  onChange={e => setDirectPayForm(p => ({ ...p, note: e.target.value }))}
+                  placeholder="Optional reference..."
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-900 outline-none focus:border-primary"
+                />
+              </div>
+              <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setDirectPayModalOpen(false)}
+                  className="rounded-lg border border-slate-200 px-4 py-2 font-semibold text-slate-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-primary px-4 py-2 font-bold text-dark hover:bg-primary-hover"
+                >
+                  Pay & Print Invoice
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </>
   );
 
@@ -1050,11 +1311,11 @@ export default function AuthorManagement() {
               Earned from book sales
             </span>
           </div>
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/40 p-5 shadow-xs">
-            <span className="text-xs font-medium text-emerald-800 block">
+          <div className="rounded-xl border border-slate-200 bg-white p-5">
+            <span className="text-xs font-medium text-slate-500 block">
               Total Due Balance
             </span>
-            <span className="font-heading text-2xl font-bold text-emerald-600 mt-1 block">
+            <span className="font-heading text-2xl font-bold text-emerald-700 mt-1 block">
               {formatCurrency(currentAuthor.totalDue)}
             </span>
             <span className="text-[11px] text-slate-500 mt-1 block">
@@ -1261,15 +1522,30 @@ export default function AuthorManagement() {
                     {currentAuthor.name}.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-xl bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-semibold text-emerald-700">
                     Settled: {formatCurrency(currentAuthor.paidAmount)}
                   </span>
                   {currentAuthor.pendingAmount > 0 && (
-                    <span className="rounded-xl bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-700 border border-amber-200">
+                    <span className="text-xs font-semibold text-amber-700">
                       Pending: {formatCurrency(currentAuthor.pendingAmount)}
                     </span>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDirectPayForm({
+                        amount: currentAuthor.totalDue > 0 ? String(Math.round(currentAuthor.totalDue)) : '',
+                        method: 'Cash',
+                        account: '',
+                        note: '',
+                      });
+                      setDirectPayModalOpen(true);
+                    }}
+                    className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-dark hover:bg-primary-hover"
+                  >
+                    + Pay Author
+                  </button>
                 </div>
               </div>
 
@@ -1362,14 +1638,24 @@ export default function AuthorManagement() {
                             })()}
                           </td>
                           <td className="px-4 py-3.5 text-right">
-                            <div className="flex items-center justify-end gap-1">
+                            <div className="flex items-center justify-end gap-2">
                               <button
                                 type="button"
                                 onClick={() => setSelectedPayout(request)}
                                 title="View Details"
-                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition"
+                                aria-label="View Details"
+                                className="p-1 text-slate-500 hover:text-dark transition"
                               >
                                 <FiEye size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setInvoicePayout(request)}
+                                title="Print Invoice"
+                                aria-label="Print Invoice"
+                                className="p-1 text-slate-600 hover:text-dark transition"
+                              >
+                                <FiPrinter size={15} />
                               </button>
 
                               {request.status?.toLowerCase() === 'pending' && (
@@ -1383,7 +1669,8 @@ export default function AuthorManagement() {
                                       })
                                     }
                                     title="Approve Request"
-                                    className="rounded-lg p-1.5 text-blue-600 hover:bg-blue-50 transition"
+                                    aria-label="Approve Request"
+                                    className="p-1 text-blue-600 hover:text-blue-800 transition"
                                   >
                                     <FiCheck size={16} />
                                   </button>
@@ -1396,7 +1683,8 @@ export default function AuthorManagement() {
                                       })
                                     }
                                     title="Reject Request"
-                                    className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50 transition"
+                                    aria-label="Reject Request"
+                                    className="p-1 text-rose-500 hover:text-rose-700 transition"
                                   >
                                     <FiX size={16} />
                                   </button>
@@ -1412,7 +1700,7 @@ export default function AuthorManagement() {
                                       request,
                                     })
                                   }
-                                  className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 transition shadow-2xs"
+                                  className="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700 transition"
                                 >
                                   Mark as Paid
                                 </button>
@@ -1458,117 +1746,73 @@ export default function AuthorManagement() {
 
       {/* Top KPI Summary Cards */}
       <div className="flex flex-wrap items-center gap-2.5">
-        {/* Card 1: Active Authors */}
         <div
           onClick={() => handleTabChange('directory')}
-          className={`w-[calc(50%-6px)] sm:w-48 cursor-pointer rounded-xl border bg-white px-3 py-2 transition-all shadow-2xs hover:border-slate-300 ${
-            activeTab === 'directory'
-              ? 'border-blue-500 ring-1 ring-blue-500/20'
-              : 'border-slate-200/80'
+          className={`w-[calc(50%-6px)] sm:w-48 cursor-pointer rounded-xl border bg-white px-3 py-2.5 transition ${
+            activeTab === 'directory' ? 'border-slate-400' : 'border-slate-200'
           }`}
         >
           <div className="flex items-center justify-between gap-1.5">
             <span className="text-xs font-medium text-slate-500 truncate">
-              Active Authors
+              Authors
             </span>
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-600">
-              <FiUsers size={12} />
-            </span>
+            <FiUsers size={14} className="text-blue-600 shrink-0" />
           </div>
-          <div className="mt-0.5 flex items-baseline justify-between gap-1">
-            <span className="font-heading text-base font-bold text-slate-900 sm:text-lg">
-              {visibleAuthors.length}
-            </span>
-            <span className="text-[10px] text-slate-400">Total Registered</span>
-          </div>
+          <span className="mt-1 block font-heading text-lg font-bold text-slate-900">
+            {visibleAuthors.length}
+          </span>
         </div>
 
-        {/* Card 2: Pending Applications */}
         <div
           onClick={() => handleTabChange('applications')}
-          className={`w-[calc(50%-6px)] sm:w-48 cursor-pointer rounded-xl border bg-white px-3 py-2 transition-all shadow-2xs hover:border-slate-300 ${
-            activeTab === 'applications'
-              ? 'border-amber-500 ring-1 ring-amber-500/20'
-              : 'border-slate-200/80'
+          className={`w-[calc(50%-6px)] sm:w-48 cursor-pointer rounded-xl border bg-white px-3 py-2.5 transition ${
+            activeTab === 'applications' ? 'border-slate-400' : 'border-slate-200'
           }`}
         >
           <div className="flex items-center justify-between gap-1.5">
             <span className="text-xs font-medium text-slate-500 truncate">
               Applications
             </span>
-            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-600">
-              <FiFileText size={12} />
-            </span>
+            <FiFileText size={14} className="text-amber-600 shrink-0" />
           </div>
-          <div className="mt-0.5 flex items-baseline justify-between gap-1">
-            <span className="font-heading text-base font-bold text-amber-600 sm:text-lg">
-              {pendingAppsCount}
-            </span>
-            <span
-              className={`text-[10px] font-semibold ${
-                pendingAppsCount > 0 ? 'text-amber-600' : 'text-slate-400'
-              }`}
-            >
-              {pendingAppsCount > 0 ? `${pendingAppsCount} Pending` : 'Reviewed'}
-            </span>
-          </div>
+          <span className="mt-1 block font-heading text-lg font-bold text-amber-600">
+            {pendingAppsCount}
+          </span>
         </div>
 
-        {/* Card 3: Pending Payout Requests */}
         {canViewPayouts && (
           <div
             onClick={() => handleTabChange('payouts')}
-            className={`w-[calc(50%-6px)] sm:w-48 cursor-pointer rounded-xl border bg-white px-3 py-2 transition-all shadow-2xs hover:border-slate-300 ${
-              activeTab === 'payouts'
-                ? 'border-emerald-500 ring-1 ring-emerald-500/20'
-                : 'border-slate-200/80'
+            className={`w-[calc(50%-6px)] sm:w-48 cursor-pointer rounded-xl border bg-white px-3 py-2.5 transition ${
+              activeTab === 'payouts' ? 'border-slate-400' : 'border-slate-200'
             }`}
           >
             <div className="flex items-center justify-between gap-1.5">
               <span className="text-xs font-medium text-slate-500 truncate">
                 Pending Payouts
               </span>
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-amber-50 text-amber-600">
-                <FiClock size={12} />
-              </span>
+              <FiClock size={14} className="text-amber-600 shrink-0" />
             </div>
-            <div className="mt-0.5 flex items-baseline justify-between gap-1">
-              <span className="font-heading text-base font-bold text-slate-900 sm:text-lg">
-                {formatTaka(payoutStats.pendingTotal)}
-              </span>
-              <span
-                className={`text-[10px] font-semibold ${
-                  pendingPayoutsCount > 0 ? 'text-amber-600' : 'text-slate-400'
-                }`}
-              >
-                {pendingPayoutsCount} Req
-              </span>
-            </div>
+            <span className="mt-1 block font-heading text-lg font-bold text-slate-900">
+              {formatTaka(payoutStats.pendingTotal)}
+            </span>
           </div>
         )}
 
-        {/* Card 4: Settled Royalties */}
         {canViewPayouts && (
           <div
             onClick={() => handleTabChange('payouts')}
-            className="w-[calc(50%-6px)] sm:w-48 cursor-pointer rounded-xl border border-slate-200/80 bg-white px-3 py-2 shadow-2xs transition-all hover:border-slate-300"
+            className="w-[calc(50%-6px)] sm:w-48 cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition"
           >
             <div className="flex items-center justify-between gap-1.5">
               <span className="text-xs font-medium text-slate-500 truncate">
-                Settled Royalties
+                Settled
               </span>
-              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-emerald-50 text-emerald-600">
-                <FiCheckCircle size={12} />
-              </span>
+              <FiCheckCircle size={14} className="text-emerald-600 shrink-0" />
             </div>
-            <div className="mt-0.5 flex items-baseline justify-between gap-1">
-              <span className="font-heading text-base font-bold text-emerald-600 sm:text-lg">
-                {formatTaka(payoutStats.paidTotal)}
-              </span>
-              <span className="text-[10px] font-medium text-emerald-600">
-                Paid Total
-              </span>
-            </div>
+            <span className="mt-1 block font-heading text-lg font-bold text-emerald-600">
+              {formatTaka(payoutStats.paidTotal)}
+            </span>
           </div>
         )}
       </div>
@@ -1945,14 +2189,24 @@ export default function AuthorManagement() {
                 header: 'Actions',
                 align: 'right',
                 render: request => (
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="flex items-center justify-end gap-2">
                     <button
                       type="button"
                       onClick={() => setSelectedPayout(request)}
                       title="View Details"
-                      className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      aria-label="View Details"
+                      className="p-1 text-slate-500 hover:text-dark transition"
                     >
                       <FiEye size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInvoicePayout(request)}
+                      title="Print Invoice"
+                      aria-label="Print Invoice"
+                      className="p-1 text-slate-600 hover:text-dark transition"
+                    >
+                      <FiPrinter size={15} />
                     </button>
 
                     {request.status?.toLowerCase() === 'pending' && (
@@ -1963,7 +2217,8 @@ export default function AuthorManagement() {
                             setPayoutActionModal({ type: 'approve', request })
                           }
                           title="Approve Request"
-                          className="rounded-lg p-1.5 text-blue-600 hover:bg-blue-50"
+                          aria-label="Approve Request"
+                          className="p-1 text-blue-600 hover:text-blue-800"
                         >
                           <FiCheck size={16} />
                         </button>
@@ -1973,7 +2228,8 @@ export default function AuthorManagement() {
                             setPayoutActionModal({ type: 'reject', request })
                           }
                           title="Reject Request"
-                          className="rounded-lg p-1.5 text-rose-500 hover:bg-rose-50"
+                          aria-label="Reject Request"
+                          className="p-1 text-rose-500 hover:text-rose-700"
                         >
                           <FiX size={16} />
                         </button>

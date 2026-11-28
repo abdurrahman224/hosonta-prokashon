@@ -2,20 +2,24 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   LuArrowDown as ArrowDown,
-  LuArrowLeft as ArrowLeft,
+  LuArrowRight as ArrowRight,
   LuArrowUp as ArrowUp,
   LuArrowUpDown as ArrowUpDown,
+  LuBookOpen as BookOpen,
+  LuCheck as CheckIcon,
+  LuClock as ClockIcon,
   LuDownload as Download,
-  LuEye as Eye,
-  LuEyeOff as EyeOff,
+  LuExternalLink as ExternalLink,
   LuFileText as FileText,
-  LuLock as Lock,
+  LuPenTool as PenTool,
   LuSearch as Search,
   LuUpload as Upload,
+  LuX as XIcon,
 } from 'react-icons/lu';
 import PageHeader from '../../../components/dashboard/PageHeader';
 import { useAuth } from '../../../context/useAuth';
 import authors from '../../../data/authors';
+import seedManuscripts from '../../../data/manuscripts';
 import { PERMISSIONS } from '../../../utils/roles';
 import {
   addActivityLog,
@@ -23,1388 +27,1060 @@ import {
   saveStoredManuscripts,
 } from '../../../utils/moderationStorage';
 
-// ===== Workflow rules =====
-// Single source of truth for statuses, allowed transitions and priorities.
-// Mirror TRANSITIONS on the server so invalid changes are rejected there too.
 const STATUS = {
   SUBMITTED: 'submitted',
-  SCREENING: 'screening',
   IN_REVIEW: 'in_review',
-  REVISION_REQUESTED: 'revision_requested',
-  RESUBMITTED: 'resubmitted',
+  PUBLISHED: 'published',
   APPROVED: 'approved',
   REJECTED: 'rejected',
-  WITHDRAWN: 'withdrawn',
 };
 
 const STATUS_META = {
   submitted: {
     label: 'Submitted',
-    tone: 'bg-blue-50 text-blue-700 ring-blue-200',
+    tone: 'bg-sky-50 text-sky-700 ring-sky-200',
+    dot: 'bg-sky-500',
   },
   screening: {
-    label: 'Under Screening',
-    tone: 'bg-indigo-50 text-indigo-700 ring-indigo-200',
+    label: 'Submitted',
+    tone: 'bg-sky-50 text-sky-700 ring-sky-200',
+    dot: 'bg-sky-500',
   },
   in_review: {
     label: 'In Review',
     tone: 'bg-amber-50 text-amber-700 ring-amber-200',
+    dot: 'bg-amber-500',
   },
   revision_requested: {
-    label: 'Revision Requested',
-    tone: 'bg-orange-50 text-orange-700 ring-orange-200',
+    label: 'In Review',
+    tone: 'bg-amber-50 text-amber-700 ring-amber-200',
+    dot: 'bg-amber-500',
   },
   resubmitted: {
-    label: 'Resubmitted',
-    tone: 'bg-cyan-50 text-cyan-700 ring-cyan-200',
+    label: 'Submitted',
+    tone: 'bg-sky-50 text-sky-700 ring-sky-200',
+    dot: 'bg-sky-500',
   },
   approved: {
-    label: 'Approved',
+    label: 'Published',
     tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    dot: 'bg-emerald-500',
   },
-  rejected: { label: 'Rejected', tone: 'bg-red-50 text-red-700 ring-red-200' },
+  published: {
+    label: 'Published',
+    tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+    dot: 'bg-emerald-500',
+  },
+  rejected: {
+    label: 'Rejected',
+    tone: 'bg-rose-50 text-rose-700 ring-rose-200',
+    dot: 'bg-rose-500',
+  },
   withdrawn: {
-    label: 'Withdrawn',
-    tone: 'bg-slate-100 text-slate-600 ring-slate-200',
+    label: 'Rejected',
+    tone: 'bg-rose-50 text-rose-700 ring-rose-200',
+    dot: 'bg-rose-500',
   },
 };
 
-const TRANSITIONS = {
-  submitted: ['screening', 'in_review', 'rejected', 'withdrawn'],
-  screening: ['in_review', 'revision_requested', 'rejected', 'withdrawn'],
-  in_review: ['revision_requested', 'approved', 'rejected', 'withdrawn'],
-  revision_requested: ['resubmitted', 'rejected', 'withdrawn'], // resubmitted is triggered by the author
-  resubmitted: [
-    'in_review',
-    'revision_requested',
-    'approved',
-    'rejected',
-    'withdrawn',
-  ],
-  approved: [],
-  rejected: [],
-  withdrawn: [],
+const BN_MONTHS = {
+  'জানুয়ারি': 'Jan',
+  'জানুয়ারি': 'Jan',
+  'ফেব্রুয়ারি': 'Feb',
+  'ফেব্রুয়ারি': 'Feb',
+  'মার্চ': 'Mar',
+  'এপ্রিল': 'Apr',
+  'মে': 'May',
+  'জুন': 'Jun',
+  'জুলাই': 'Jul',
+  'আগস্ট': 'Aug',
+  'সেপ্টেম্বর': 'Sep',
+  'অক্টোবর': 'Oct',
+  'নভেম্বর': 'Nov',
+  'ডিসেম্বর': 'Dec',
 };
 
-// Statuses that need written feedback for the author
-const FEEDBACK_REQUIRED = ['revision_requested', 'rejected'];
+function toEnglishDigits(str = '') {
+  const bn = '০১২৩৪৫৬৭৮৯';
+  return String(str).replace(/[০-৯]/g, d => String(bn.indexOf(d)));
+}
 
-const PRIORITIES = {
-  low: {
-    label: 'Low',
-    tone: 'bg-slate-100 text-slate-600 ring-slate-200',
-    rank: 0,
-  },
-  normal: {
-    label: 'Normal',
-    tone: 'bg-blue-50 text-blue-700 ring-blue-200',
-    rank: 1,
-  },
-  high: {
-    label: 'High',
-    tone: 'bg-orange-50 text-orange-700 ring-orange-200',
-    rank: 2,
-  },
-  urgent: {
-    label: 'Urgent',
-    tone: 'bg-red-50 text-red-700 ring-red-200',
-    rank: 3,
-  },
+function parseFlexibleDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+
+  const raw = toEnglishDigits(value).trim();
+  if (!raw) return null;
+
+  const dmyMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (dmyMatch) {
+    const [, dd, mm, yyyy] = dmyMatch;
+    const parsed = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  let replaced = raw.replace(/,/g, '');
+  Object.entries(BN_MONTHS).forEach(([bnMonth, enMonth]) => {
+    replaced = replaced.replace(bnMonth, enMonth);
+  });
+
+  const parsed = new Date(replaced);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+const formatDay = d => {
+  const parsed = parseFlexibleDate(d);
+  if (parsed) {
+    return parsed.toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+  return d ? String(d) : '—';
 };
 
-// Maps legacy statuses already stored by the old page
-const normalizeStatus = s =>
-  s === 'revision' ? STATUS.REVISION_REQUESTED : s || STATUS.SUBMITTED;
+const formatDateTime = d => {
+  const parsed = parseFlexibleDate(d);
+  if (parsed) {
+    return parsed.toLocaleString('en-GB', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+    });
+  }
+  return d ? String(d) : '—';
+};
 
-// Editors can't trigger "resubmitted"; only the author's submitRevision() does.
-const editorTransitions = status =>
-  (TRANSITIONS[normalizeStatus(status)] ?? []).filter(
-    s => s !== STATUS.RESUBMITTED,
-  );
-
-const canTransition = (from, to) =>
-  (TRANSITIONS[normalizeStatus(from)] ?? []).includes(to);
-
-// ===== Data layer (swap for API calls later) =====
-// Data layer for editorial management. It sits on the existing moderationStorage helpers,
-// and every function is async so it can be swapped for real API calls without touching the UI.
-
-const NOTIF_KEY = 'publisher_notifications';
-const MAX_INLINE_FILE = 1.5 * 1024 * 1024; // localStorage only; a real backend should take multipart uploads
-const ADMIN_ROLES = ['admin', 'super_admin']; // ASSUMPTION: adjust to your roles.js
+const formatFileSize = bytes => {
+  if (!bytes) return '';
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+};
 
 const uid = p =>
   `${p}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
-const now = () => new Date().toISOString();
+
+function normalizeStatus(s) {
+  if (s === 'revision') return STATUS.IN_REVIEW;
+  if (s === 'approved') return STATUS.PUBLISHED;
+  return s || STATUS.SUBMITTED;
+}
 
 function normalizeManuscript(m) {
-  const updatedAt = m.updatedAt || m.reviewedAt || m.submittedAt;
-  return {
-    priority: 'normal',
-    assignedEditorId: null,
-    reviewerId: null,
-    revisionDeadline: null,
-    productionStatus: null,
-    versions: [],
-    annotatedFiles: [],
-    timeline: [],
+  const seedMatch = seedManuscripts.find(item => item.id === m.id) || {};
+  const merged = {
+    ...seedMatch,
     ...m,
-    status: normalizeStatus(m.status),
+  };
+  const updatedAt = merged.updatedAt || merged.reviewedAt || merged.submittedAt;
+  const baseVersions = Array.isArray(merged.versions) ? merged.versions : [];
+  const versions =
+    baseVersions.length > 0
+      ? baseVersions
+      : merged.fileName
+        ? [
+            {
+              id: `file-${merged.id}`,
+              version: 1,
+              name: merged.fileName,
+              size: merged.fileSize || 0,
+              type: merged.fileType || '',
+              dataUrl: merged.fileDataUrl || null,
+              submittedBy: merged.authorId,
+              submittedAt: merged.submittedAt,
+            },
+          ]
+        : [];
+  const submitMode =
+    merged.submitMode ||
+    (versions.length > 0 || Boolean(merged.fileName) ? 'file' : 'text');
+
+  return {
+    ...merged,
+    submitMode,
+    versions,
+    status: normalizeStatus(merged.status),
     updatedAt,
-    // legacy single-string fields become entries in separate lists
     authorFeedback:
-      m.authorFeedback ??
-      (m.feedback
+      merged.authorFeedback ??
+      (merged.feedback
         ? [
             {
               id: uid('fb'),
-              text: m.feedback,
-              byId: m.reviewedBy,
-              at: m.reviewedAt || updatedAt,
-            },
-          ]
-        : []),
-    internalNotes:
-      m.internalNotes ??
-      (m.internalNote
-        ? [
-            {
-              id: uid('in'),
-              text: m.internalNote,
-              byId: m.reviewedBy,
-              at: m.reviewedAt || updatedAt,
+              text: merged.feedback,
+              byId: merged.reviewedBy,
+              at: merged.reviewedAt || updatedAt,
             },
           ]
         : []),
   };
 }
 
-async function listManuscripts() {
+function getAllNormalizedManuscripts() {
   return getStoredManuscripts().map(normalizeManuscript);
 }
 
-async function getManuscript(id) {
-  return (await listManuscripts()).find(m => m.id === id) ?? null;
-}
-
-// Client-side access rule. The backend must enforce the same rule.
-function canAccessManuscript(m, user) {
-  if (!user) return false;
-  if (ADMIN_ROLES.includes(user.role)) return true;
-  return (
-    !m.assignedEditorId ||
-    m.assignedEditorId === user.id ||
-    m.reviewerId === user.id
-  );
-}
-
-// What an author is allowed to see: never internal notes or internal timeline entries.
-function toAuthorView(m) {
-  const { internalNotes, internalNote, ...safe } = m;
-  return { ...safe, timeline: m.timeline.filter(e => !e.internal) };
-}
-
-async function getEditors(currentUser) {
-  // TODO: replace with your users API filtered by editor roles.
-  const ids = new Set(
-    (await listManuscripts())
-      .flatMap(m => [m.assignedEditorId, m.reviewerId])
-      .filter(Boolean),
-  );
-  if (currentUser) ids.add(currentUser.id);
-  return [...ids].map(id => ({
-    id,
-    name: id === currentUser?.id ? (currentUser.name ?? id) : id,
-  }));
-}
-
-async function mutate(id, actor, entry, fn) {
-  const all = (await listManuscripts()).map(m => {
+function updateManuscriptDecision(id, to, actor, feedback = '') {
+  const nowIso = new Date().toISOString();
+  const trimmedFeedback = feedback.trim();
+  const all = getAllNormalizedManuscripts().map(m => {
     if (m.id !== id) return m;
-    const next = fn(m);
     return {
-      ...next,
-      updatedAt: now(),
-      timeline: [
-        ...next.timeline,
-        { id: uid('tl'), at: now(), byId: actor.id, internal: false, ...entry },
-      ],
+      ...m,
+      status: to,
+      reviewedBy: actor.id,
+      reviewedAt: nowIso,
+      updatedAt: nowIso,
+      feedback: trimmedFeedback || m.feedback || '',
+      productionStatus: to === STATUS.PUBLISHED ? 'published' : null,
+      authorFeedback: trimmedFeedback
+        ? [
+            ...(m.authorFeedback || []),
+            { id: uid('fb'), text: trimmedFeedback, byId: actor.id, at: nowIso },
+          ]
+        : m.authorFeedback || [],
     };
   });
   saveStoredManuscripts(all);
   addActivityLog({
     actorId: actor.id,
     actorRole: actor.role,
-    action: entry.type,
+    action: to,
     entity: 'manuscript',
     entityId: id,
-    comment: entry.text,
-    internalNote: entry.internal ? entry.text : undefined,
+    comment: trimmedFeedback || undefined,
   });
-  return all.find(m => m.id === id);
+  return all.find(m => m.id === id) || null;
 }
 
-async function notify(userId, type, message, entityId) {
-  if (!userId) return;
-  const list = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
-  list.unshift({
-    id: uid('nt'),
-    userId,
-    type,
-    message,
-    entityId,
-    createdAt: now(),
-    read: false,
-  });
-  localStorage.setItem(NOTIF_KEY, JSON.stringify(list.slice(0, 500)));
-}
-
-async function getNotifications(userId) {
-  return JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]').filter(
-    n => n.userId === userId,
-  );
-}
-
-async function changeStatus(
-  id,
-  to,
-  actor,
-  { feedback = '', deadline = null } = {},
-) {
-  const current = await getManuscript(id);
-  if (!current) throw new Error('Manuscript not found.');
-  if (!canTransition(current.status, to))
-    throw new Error(`Cannot move from ${current.status} to ${to}.`);
-  if (FEEDBACK_REQUIRED.includes(to) && !feedback.trim())
-    throw new Error('Feedback for the author is required.');
-  if (to === STATUS.REVISION_REQUESTED && !deadline)
-    throw new Error('Set a revision deadline.');
-
-  const updated = await mutate(
-    id,
-    actor,
-    { type: to, text: feedback.trim() || undefined },
-    m => ({
-      ...m,
-      status: to,
-      reviewedBy: actor.id,
-      reviewedAt: now(),
-      revisionDeadline:
-        to === STATUS.REVISION_REQUESTED ? deadline : m.revisionDeadline,
-      productionStatus:
-        to === STATUS.APPROVED ? 'ready_for_production' : m.productionStatus, // handoff flag only; no book/inventory is created
-      authorFeedback: feedback.trim()
-        ? [
-            ...m.authorFeedback,
-            { id: uid('fb'), text: feedback.trim(), byId: actor.id, at: now() },
-          ]
-        : m.authorFeedback,
-    }),
-  );
-  await notify(
-    current.authorId,
-    to,
-    `Your manuscript "${current.title}" is now ${to.replace('_', ' ')}.`,
-    id,
-  );
-  return updated;
-}
-
-async function assign(id, { editorId, reviewerId }, actor) {
-  const updated = await mutate(
-    id,
-    actor,
-    {
-      type: 'assigned',
-      text: `Editor: ${editorId || 'none'}, reviewer: ${reviewerId || 'none'}`,
-    },
-    m => ({
-      ...m,
-      assignedEditorId: editorId || null,
-      reviewerId: reviewerId || null,
-    }),
-  );
-  await notify(
-    editorId,
-    'assignment',
-    `You were assigned "${updated.title}".`,
-    id,
-  );
-  await notify(
-    reviewerId,
-    'assignment',
-    `You were assigned to review "${updated.title}".`,
-    id,
-  );
-  return updated;
-}
-
-const setPriority = (id, priority, actor) =>
-  mutate(
-    id,
-    actor,
-    { type: 'priority_changed', text: `Priority set to ${priority}` },
-    m => ({ ...m, priority }),
-  );
-
-const addInternalNote = (id, text, actor) =>
-  mutate(id, actor, { type: 'internal_note', text, internal: true }, m => ({
-    ...m,
-    internalNotes: [
-      ...m.internalNotes,
-      { id: uid('in'), text, byId: actor.id, at: now() },
-    ],
-  }));
-
-const addAuthorFeedback = (id, text, actor) =>
-  mutate(id, actor, { type: 'feedback', text }, m => ({
-    ...m,
-    authorFeedback: [
-      ...m.authorFeedback,
-      { id: uid('fb'), text, byId: actor.id, at: now() },
-    ],
-  }));
-
-function readFile(file) {
-  return new Promise((resolve, reject) => {
-    const meta = {
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      dataUrl: null,
-    };
-    if (file.size > MAX_INLINE_FILE) return resolve(meta); // metadata only; needs real storage
-    const r = new FileReader();
-    r.onload = () => resolve({ ...meta, dataUrl: r.result });
-    r.onerror = () => reject(new Error('Could not read the file.'));
-    r.readAsDataURL(file);
-  });
-}
-
-async function addAnnotatedFile(id, file, actor) {
-  const f = await readFile(file);
-  return mutate(id, actor, { type: 'annotated_file', text: f.name }, m => ({
-    ...m,
-    annotatedFiles: [
-      ...m.annotatedFiles,
-      { id: uid('af'), ...f, byId: actor.id, at: now() },
-    ],
-  }));
-}
-
-// Called from the author side. Appends a new version; earlier versions are never touched.
-async function submitRevision(id, file, note, actor) {
-  const f = await readFile(file);
-  const current = await getManuscript(id);
-  const updated = await mutate(
-    id,
-    actor,
-    { type: 'resubmitted', text: note || undefined },
-    m => ({
-      ...m,
-      status: STATUS.RESUBMITTED,
-      versions: [
-        ...m.versions,
-        {
-          id: uid('v'),
-          version: m.versions.length + 1,
-          ...f,
-          note,
-          submittedBy: actor.id,
-          submittedAt: now(),
-        },
-      ],
-    }),
-  );
-  await notify(
-    current.assignedEditorId,
-    'resubmitted',
-    `New version of "${current.title}" was submitted.`,
-    id,
-  );
-  return updated;
-}
-
-const sendToProduction = (id, actor) =>
-  mutate(id, actor, { type: 'sent_to_production' }, m => {
-    if (m.status !== STATUS.APPROVED)
-      throw new Error('Only approved manuscripts can go to production.');
-    return { ...m, productionStatus: 'sent_to_production' }; // hook your Book Production module here
-  });
-
-const svc = {
-  getManuscript,
-  getEditors,
-  canAccessManuscript,
-  changeStatus,
-  assign,
-  setPriority,
-  addInternalNote,
-  addAnnotatedFile,
-  sendToProduction,
-};
-
-// ===== Review workspace =====
 function StatusPill({ status }) {
-  const m = STATUS_META[status] ?? STATUS_META.submitted;
+  const meta = STATUS_META[status] ?? STATUS_META.submitted;
   return (
     <span
-      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${m.tone}`}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ${meta.tone}`}
     >
-      {m.label}
-    </span>
-  );
-}
-function PriorityPill({ priority }) {
-  const p = PRIORITIES[priority] ?? PRIORITIES.normal;
-  return (
-    <span
-      className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${p.tone}`}
-    >
-      {p.label}
+      <span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />
+      {meta.label}
     </span>
   );
 }
 
-const fmt = d => (d ? new Date(d).toLocaleString() : '—');
-const kb = n => (n ? `${Math.max(1, Math.round(n / 1024))} KB` : '');
-const Card = ({ title, children, aside }) => (
-  <section className="rounded-xl border border-slate-200 bg-white p-5">
-    <div className="mb-3 flex items-center justify-between">
-      <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
-      {aside}
-    </div>
-    {children}
-  </section>
-);
-const inputCls =
-  'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none focus:ring-1 focus:ring-slate-500';
-
-function FileRow({ file, label }) {
-  return (
-    <li className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm">
-      <span className="flex min-w-0 items-center gap-2">
-        <FileText size={16} className="shrink-0 text-slate-400" />
-        <span className="truncate">
-          {label} {file.name}
-        </span>
-        <span className="text-xs text-slate-400">{kb(file.size)}</span>
-      </span>
-      {file.dataUrl ? (
-        <span className="flex shrink-0 gap-3">
-          {file.type === 'application/pdf' && (
-            <a
-              href={file.dataUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-slate-600 hover:underline"
-            >
-              Preview
-            </a>
-          )}
-          <a
-            href={file.dataUrl}
-            download={file.name}
-            className="flex items-center gap-1 text-slate-600 hover:underline"
-          >
-            <Download size={14} />
-            Download
-          </a>
-        </span>
-      ) : (
-        <span className="text-xs text-slate-400">Stored on server</span>
-      )}
-    </li>
-  );
-}
-
-function ManuscriptDetails({ manuscriptId, onBack, onChanged }) {
-  const { currentUser, can } = useAuth();
-  const canReview = can(PERMISSIONS.MANUSCRIPTS_REVIEW);
-  const [m, setM] = useState(null);
-  const [editors, setEditors] = useState([]);
-  const [error, setError] = useState('');
+function ManuscriptModal({
+  manuscript,
+  authorInfo,
+  canReview,
+  onClose,
+  onDecisionUpdated,
+}) {
+  const { currentUser } = useAuth();
+  const [feedback, setFeedback] = useState(manuscript?.feedback || '');
   const [busy, setBusy] = useState(false);
-  const [feedback, setFeedback] = useState('');
-  const [deadline, setDeadline] = useState('');
-  const [note, setNote] = useState('');
 
   useEffect(() => {
-    let live = true;
-    Promise.all([svc.getManuscript(manuscriptId), svc.getEditors(currentUser)])
-      .then(([item, eds]) => {
-        if (live) {
-          setM(item);
-          setEditors(eds);
-          if (!item) setError('Manuscript not found.');
-        }
-      })
-      .catch(e => live && setError(e.message));
-    return () => {
-      live = false;
+    const onKeyDown = e => {
+      if (e.key === 'Escape') onClose();
     };
-  }, [manuscriptId, currentUser]);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
-  const run = async (fn, success) => {
+  if (!manuscript) return null;
+
+  const isFileSubmission = manuscript.submitMode === 'file';
+  const primaryFile = manuscript.versions?.[manuscript.versions.length - 1] || null;
+  const readableContent =
+    manuscript.text || manuscript.sampleExcerpt || manuscript.summary || '';
+  const estimatedWords =
+    manuscript.wordCount ||
+    (readableContent ? readableContent.trim().split(/\s+/).length : 0);
+
+  const handleDecision = nextStatus => {
     setBusy(true);
     try {
-      const next = await fn();
-      setM(next);
-      onChanged?.(next);
-      if (success) toast.success(success);
-      return true;
-    } catch (e) {
-      toast.error(e.message || 'Action failed.');
-      return false;
+      const updated = updateManuscriptDecision(
+        manuscript.id,
+        nextStatus,
+        currentUser,
+        feedback,
+      );
+      toast.success(
+        nextStatus === STATUS.PUBLISHED
+          ? 'Manuscript marked as Published.'
+          : 'Manuscript marked as Rejected.',
+      );
+      onDecisionUpdated(updated);
     } finally {
       setBusy(false);
     }
   };
 
-  if (error)
-    return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-        {error}{' '}
-        <button onClick={onBack} className="ml-2 underline">
-          Back to queue
-        </button>
-      </div>
-    );
-  if (!m)
-    return (
-      <div className="p-10 text-center text-sm text-slate-500">
-        Loading manuscript…
-      </div>
-    );
-  if (!svc.canAccessManuscript(m, currentUser))
-    return (
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-800">
-        This manuscript is assigned to another editor.{' '}
-        <button onClick={onBack} className="ml-2 underline">
-          Back to queue
-        </button>
-      </div>
-    );
-
-  const author = authors.find(a => a.id === m.authorId);
-  const nameOf = id =>
-    editors.find(e => e.id === id)?.name ??
-    authors.find(a => a.id === id)?.name ??
-    id ??
-    '—';
-  const next = editorTransitions(m.status);
-  const latest = m.versions.at(-1);
-
-  const transition = async to => {
-    const ok = await run(
-      () =>
-        svc.changeStatus(m.id, to, currentUser, {
-          feedback,
-          deadline: deadline || null,
-        }),
-      `Status changed to ${STATUS_META[to].label}.`,
-    );
-    if (ok) {
-      setFeedback('');
-      setDeadline('');
-    }
-  };
-
   return (
-    <div className="space-y-5">
-      <button
-        onClick={onBack}
-        className="inline-flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900"
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 p-2.5 backdrop-blur-xs sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        onClick={e => e.stopPropagation()}
       >
-        <ArrowLeft size={16} />
-        Back to queue
-      </button>
-
-      <header className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-slate-200 bg-white p-5">
-        <div>
-          <h2 className="text-xl font-semibold text-slate-900">{m.title}</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            {m.id} · {author?.name ?? m.authorId} · {m.type}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <PriorityPill priority={m.priority} />
-          <StatusPill status={m.status} />
-        </div>
-      </header>
-
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-5 lg:col-span-2">
-          <Card title="Synopsis">
-            <p className="text-sm leading-relaxed text-slate-700">
-              {m.summary || 'No synopsis provided.'}
-            </p>
-          </Card>
-
-          <Card title="Author">
-            <dl className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <dt className="text-slate-500">Name</dt>
-                <dd>{author?.name ?? m.authorId}</dd>
+        {/* Top Modal Header */}
+        <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-6">
+          <div className="flex min-w-0 items-start gap-3.5">
+            <div className="hidden h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary/20 text-dark sm:flex">
+              <BookOpen size={22} />
+            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="font-heading text-lg font-bold text-slate-900 sm:text-xl">
+                  {manuscript.title}
+                </h2>
+                <StatusPill status={manuscript.status} />
               </div>
-              <div>
-                <dt className="text-slate-500">Email</dt>
-                <dd>{author?.email ?? '—'}</dd>
+              <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                <span className="font-semibold text-slate-700">
+                  {authorInfo.name}
+                </span>
+                <span>•</span>
+                <span>Category: {manuscript.type || 'Uncategorized'}</span>
+                <span>•</span>
+                <span>Submitted {formatDay(manuscript.submittedAt)}</span>
               </div>
-            </dl>
-          </Card>
+            </div>
+          </div>
 
-          <Card
-            title={`Manuscript files (${m.versions.length} version${m.versions.length === 1 ? '' : 's'})`}
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close modal"
+            className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
           >
-            {m.versions.length === 0 ? (
-              <p className="text-sm text-slate-500">No file uploaded yet.</p>
-            ) : (
-              <ul className="space-y-2">
-                {[...m.versions].reverse().map(v => (
-                  <div key={v.id}>
-                    <FileRow file={v} label={`v${v.version}`} />
-                    <p className="px-1 pt-1 text-xs text-slate-400">
-                      {fmt(v.submittedAt)} by {nameOf(v.submittedBy)}
-                      {v.note ? ` — ${v.note}` : ''}
+            <XIcon size={20} />
+          </button>
+        </div>
+
+        {/* Modal Body: Left Manuscript Reader + Right Publishing Decision */}
+        <div className="flex-1 overflow-y-auto bg-slate-50/70 p-4 sm:p-6">
+          <div className="grid gap-5 lg:grid-cols-[1.55fr_1fr]">
+            {/* Left Column: Manuscript Viewer */}
+            <div className="space-y-4">
+              {/* Manuscript Specs Strip */}
+              <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 sm:grid-cols-4">
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500">Book Name</p>
+                  <p className="mt-0.5 truncate text-xs font-bold text-slate-900 sm:text-sm">
+                    {manuscript.title}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500">Category</p>
+                  <p className="mt-0.5 truncate text-xs font-bold text-slate-900 sm:text-sm">
+                    {manuscript.type || 'General'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500">Submit as</p>
+                  <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-bold text-slate-900 sm:text-sm">
+                    {isFileSubmission ? (
+                      <>
+                        <Upload size={13} className="text-blue-600" />
+                        Upload File
+                      </>
+                    ) : (
+                      <>
+                        <PenTool size={13} className="text-amber-600" />
+                        Write Text
+                      </>
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[11px] font-medium text-slate-500">
+                    {isFileSubmission && manuscript.pagesCount
+                      ? 'Length'
+                      : 'Word Count'}
+                  </p>
+                  <p className="mt-0.5 text-xs font-bold text-slate-900 sm:text-sm">
+                    {manuscript.pagesCount
+                      ? `${manuscript.pagesCount} pages`
+                      : estimatedWords
+                        ? `${estimatedWords.toLocaleString()} words`
+                        : '—'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Uploaded File Header (when submitted as Upload File) */}
+              {isFileSubmission && primaryFile && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-blue-200/80 bg-blue-50/40 px-4 py-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+                      <FileText size={18} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-bold text-slate-900">
+                        {primaryFile.name}
+                      </p>
+                      <p className="text-xs text-slate-500">
+                        {formatFileSize(primaryFile.size) || 'Manuscript document'}
+                        {manuscript.wordCount
+                          ? ` • ${manuscript.wordCount.toLocaleString()} words`
+                          : ''}
+                      </p>
+                    </div>
+                  </div>
+                  {primaryFile.dataUrl && (
+                    <div className="flex items-center gap-2">
+                      {primaryFile.type === 'application/pdf' && (
+                        <a
+                          href={primaryFile.dataUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                        >
+                          <ExternalLink size={13} />
+                          Open PDF
+                        </a>
+                      )}
+                      <a
+                        href={primaryFile.dataUrl}
+                        download={primaryFile.name}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-dark px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800"
+                      >
+                        <Download size={13} />
+                        Download
+                      </a>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Manuscript Document Reader Sheet */}
+              <div className="rounded-xl border border-amber-900/15  p-3 shadow-inner sm:p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-900/10 pb-3">
+                  {/* <span className="text-[11px] font-bold  tracking-widest text-amber-900/70">
+                    {isFileSubmission
+                      ? 'Manuscript Document Preview'
+                      : 'Author Written Manuscript'}
+                  </span> */}
+                  {/* <span className="text-xs text-slate-500">
+                    {manuscript.language || 'Bengali'}
+                    {estimatedWords
+                      ? ` · ${estimatedWords.toLocaleString()} words`
+                      : ''}
+                  </span> */}
+                </div>
+
+                {isFileSubmission &&
+                primaryFile?.dataUrl &&
+                primaryFile?.type === 'application/pdf' ? (
+                  <iframe
+                    src={primaryFile.dataUrl}
+                    title={manuscript.title}
+                    className="mt-4 h-[380px] w-full rounded-xl"
+                  />
+                ) : (
+                  <div className="mt-4 space-y-4">
+                    {/* <div className="border-b border-dashed border-amber-900/10 pb-3">
+                      <h3 className="font-heading text-xl font-bold text-slate-900">
+                        {manuscript.title}
+                      </h3>
+                      <p className="mt-0.5 text-xs font-medium text-slate-500">
+                        By {authorInfo.name} · {manuscript.type}
+                      </p>
+                    </div> */}
+
+                    {manuscript.summary &&
+                      manuscript.summary !== readableContent && (
+                        <div className="rounded-xl  p-3.5 text-xs leading-relaxed text-slate-600 ring-1 ring-amber-900/10">
+                          <span className="font-bold text-slate-800">
+                            Subtitle :{' '}
+                          </span>
+                          {manuscript.summary}
+                        </div>
+                      )}
+
+                    <div className="max-h-[340px] overflow-y-auto pr-1 text-sm leading-7 text-slate-800 whitespace-pre-line">
+                      {readableContent ||
+                        'File attached above. No plain-text preview was included with this upload.'}
+                    </div>
+                  </div>
+                )}
+
+                {manuscript.comments && (
+                  <div className="mt-4 rounded-xl border border-amber-200/70 bg-amber-50/70 px-4 py-3 text-xs text-amber-950">
+                    <span className="font-bold">Author Note: </span>
+                    {manuscript.comments}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Right Column: Author Profile & Admin Decision */}
+            <div className="space-y-4">
+              {/* Author Card */}
+              <div className="rounded-2xl border border-slate-200/80  p-4 sm:p-5">
+                <p className="text-[11px] font-bold  tracking-wider ">
+                  Author Details
+                </p>
+                <div className="mt-3 flex items-center gap-3">
+                  <img
+                    src={authorInfo.avatar}
+                    alt={authorInfo.name}
+                    className="h-11 w-11 rounded-full object-cover ring-2 ring-primary/30"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate font-heading text-sm font-bold text-slate-900">
+                      {authorInfo.name}
+                    </p>
+                    <p className="truncate text-xs ">
+                      {authorInfo.email}
                     </p>
                   </div>
-                ))}
-              </ul>
-            )}
-            {m.annotatedFiles.length > 0 && (
-              <>
-                <h4 className="mb-2 mt-4 text-xs font-semibold text-slate-500">
-                  Annotated files
-                </h4>
-                <ul className="space-y-2">
-                  {m.annotatedFiles.map(f => (
-                    <FileRow key={f.id} file={f} label="" />
-                  ))}
-                </ul>
-              </>
-            )}
-            {canReview && (
-              <label className="mt-4 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
-                <Upload size={15} />
-                Upload annotated file
-                <input
-                  type="file"
-                  className="hidden"
-                  disabled={busy}
-                  onChange={e => {
-                    const f = e.target.files?.[0];
-                    if (f)
-                      run(
-                        () => svc.addAnnotatedFile(m.id, f, currentUser),
-                        'Annotated file uploaded.',
-                      );
-                    e.target.value = '';
-                  }}
-                />
-              </label>
-            )}
-          </Card>
-
-          <Card title="Review timeline">
-            {m.timeline.length === 0 ? (
-              <p className="text-sm text-slate-500">No activity yet.</p>
-            ) : (
-              <ol className="space-y-3 border-l border-slate-200 pl-4">
-                {[...m.timeline].reverse().map(e => (
-                  <li key={e.id} className="text-sm">
-                    <p className="font-medium text-slate-800">
-                      {STATUS_META[e.type]?.label ??
-                        e.type.replaceAll('_', ' ')}
-                      {e.internal && (
-                        <span className="ml-2 inline-flex items-center gap-1 text-xs font-normal text-amber-700">
-                          <EyeOff size={12} />
-                          Internal
-                        </span>
-                      )}
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3 text-xs">
+                  <div>
+                    <p className="text-slate-400">Submitted</p>
+                    <p className="font-semibold text-slate-700">
+                      {formatDateTime(manuscript.submittedAt)}
                     </p>
-                    {e.text && <p className="text-slate-600">{e.text}</p>}
-                    <p className="text-xs text-slate-400">
-                      {fmt(e.at)} · {nameOf(e.byId)}
+                  </div>
+                  {/* <div>
+                    <p className="text-slate-400">Reference ID</p>
+                    <p className="font-mono font-semibold text-slate-700">
+                      {manuscript.id}
                     </p>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </Card>
-        </div>
+                  </div> */}
+                </div>
+              </div>
 
-        <div className="space-y-5">
-          <Card title="Assignment">
-            {canReview ? (
-              <AssignForm
-                m={m}
-                editors={editors}
-                busy={busy}
-                onSave={v =>
-                  run(
-                    () => svc.assign(m.id, v, currentUser),
-                    'Assignment saved.',
-                  )
-                }
-                onPriority={p =>
-                  run(
-                    () => svc.setPriority(m.id, p, currentUser),
-                    'Priority updated.',
-                  )
-                }
-              />
-            ) : (
-              <p className="text-sm text-slate-600">
-                Editor: {nameOf(m.assignedEditorId)}
-                <br />
-                Reviewer: {nameOf(m.reviewerId)}
-              </p>
-            )}
-            {m.revisionDeadline && (
-              <p className="mt-3 text-xs text-slate-500">
-                Revision due {m.revisionDeadline}
-              </p>
-            )}
-          </Card>
+              {/* Decision Card */}
+              {canReview && (
+                <div className="rounded-xl border border-slate-200/80 p-3.5 sm:p-4">
+                  <p className="text-[11px] font-bold  tracking-wider text-slate-400">
+                    Decision
+                  </p>
+                  {/* <p className="mt-1 text-xs ">
+                    Publish this manuscript or mark it as rejected with optional feedback for the author.
+                  </p> */}
 
-          {canReview && (
-            <Card title="Decision">
-              {next.length === 0 ? (
-                <p className="text-sm text-slate-500">
-                  This manuscript is in a final state.
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  <label className="block text-sm">
-                    <span className="mb-1 block text-slate-600">
-                      Feedback for the author (visible to author)
+                  <label className="mt-3 block">
+                    <span className="mb-1.5 block text-xs font-semibold text-slate-700">
+                      Feedback for Author (Optional)
                     </span>
                     <textarea
                       rows={4}
                       value={feedback}
                       onChange={e => setFeedback(e.target.value)}
-                      className={inputCls}
+                      placeholder="Write review remarks or publishing instructions for the author..."
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 px-3.5 py-2.5 text-sm outline-none transition focus:border-primary focus:bg-white"
                     />
                   </label>
-                  <label className="block text-sm">
-                    <span className="mb-1 block text-slate-600">
-                      Revision deadline
-                    </span>
-                    <input
-                      type="date"
-                      value={deadline}
-                      onChange={e => setDeadline(e.target.value)}
-                      className={inputCls}
-                    />
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {next.map(to => (
-                      <button
-                        key={to}
-                        disabled={busy}
-                        onClick={() => transition(to)}
-                        className={`rounded-lg px-3 py-1.5 text-sm font-medium disabled:opacity-50 ${to === 'approved' ? 'bg-emerald-600 text-white hover:bg-emerald-700' : to === 'rejected' ? 'bg-red-600 text-white hover:bg-red-700' : 'border border-slate-300 text-slate-700 hover:bg-slate-50'}`}
-                      >
-                        {to === 'approved'
-                          ? 'Approve'
-                          : to === 'rejected'
-                            ? 'Reject'
-                            : to === 'revision_requested'
-                              ? 'Request revision'
-                              : `Move to ${STATUS_META[to].label}`}
-                      </button>
-                    ))}
+
+                  <div className="mt-4 grid grid-cols-2 gap-2.5">
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleDecision(STATUS.PUBLISHED)}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-xs transition hover:bg-emerald-700 disabled:opacity-50"
+                    >
+                      <CheckIcon size={15} />
+                      <span>Published</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => handleDecision(STATUS.REJECTED)}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2.5 text-xs font-bold text-white shadow-xs transition hover:bg-rose-700 disabled:opacity-50"
+                    >
+                      <XIcon size={15} />
+                      <span>Rejected</span>
+                    </button>
                   </div>
-                  <p className="text-xs text-slate-400">
-                    Feedback is required to{' '}
-                    {FEEDBACK_REQUIRED.map(s =>
-                      STATUS_META[s].label.toLowerCase(),
-                    ).join(' or ')}
-                    .
-                  </p>
-                </div>
-              )}
-              {m.status === 'approved' && (
-                <div className="mt-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">
-                  {m.productionStatus === 'sent_to_production' ? (
-                    'Sent to Book Production.'
-                  ) : (
-                    <>
-                      <p>
-                        Approved. Send it to Book Production when you are ready.
-                        No book or inventory is created automatically.
+
+                  {manuscript.feedback && (
+                    <div className="mt-4 rounded-xl border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
+                      <p className="font-semibold text-slate-800">
+                        Last Sent Feedback
                       </p>
-                      <button
-                        disabled={busy}
-                        onClick={() =>
-                          run(
-                            () => svc.sendToProduction(m.id, currentUser),
-                            'Sent to Book Production.',
-                          )
-                        }
-                        className="mt-2 rounded-lg bg-emerald-600 px-3 py-1.5 font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-                      >
-                        Send to Book Production
-                      </button>
-                    </>
+                      <p className="mt-1 leading-relaxed">{manuscript.feedback}</p>
+                    </div>
                   )}
                 </div>
               )}
-            </Card>
-          )}
-
-          <Card title="Author feedback history">
-            {m.authorFeedback.length === 0 ? (
-              <p className="text-sm text-slate-500">None sent.</p>
-            ) : (
-              <ul className="space-y-3">
-                {m.authorFeedback.map(f => (
-                  <li key={f.id} className="text-sm text-slate-700">
-                    {f.text}
-                    <p className="text-xs text-slate-400">
-                      {fmt(f.at)} · {nameOf(f.byId)}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Card>
-
-          {canReview && (
-            <section className="rounded-xl border border-amber-200 bg-amber-50/60 p-5">
-              <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-amber-900">
-                <Lock size={14} />
-                Internal notes
-              </h3>
-              <p className="mb-3 text-xs text-amber-800">
-                Only editors see these. They are never shown to authors.
-              </p>
-              <ul className="mb-3 space-y-2">
-                {m.internalNotes.map(n => (
-                  <li
-                    key={n.id}
-                    className="rounded-lg bg-white p-2 text-sm text-slate-700"
-                  >
-                    {n.text}
-                    <p className="text-xs text-slate-400">
-                      {fmt(n.at)} · {nameOf(n.byId)}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-              <textarea
-                rows={3}
-                value={note}
-                onChange={e => setNote(e.target.value)}
-                placeholder="Add a private note…"
-                className={inputCls}
-              />
-              <button
-                disabled={busy || !note.trim()}
-                onClick={async () => {
-                  if (
-                    await run(
-                      () => svc.addInternalNote(m.id, note.trim(), currentUser),
-                      'Note added.',
-                    )
-                  )
-                    setNote('');
-                }}
-                className="mt-2 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-100 disabled:opacity-50"
-              >
-                Add note
-              </button>
-            </section>
-          )}
+            </div>
+          </div>
         </div>
       </div>
-      {latest && (
-        <p className="text-xs text-slate-400">
-          Latest version: v{latest.version}
-        </p>
-      )}
     </div>
   );
 }
 
-function AssignForm({ m, editors, busy, onSave, onPriority }) {
-  const [editorId, setEditorId] = useState(m.assignedEditorId ?? '');
-  const [reviewerId, setReviewerId] = useState(m.reviewerId ?? '');
-  const opts = (
-    <>
-      <option value="">Unassigned</option>
-      {editors.map(e => (
-        <option key={e.id} value={e.id}>
-          {e.name}
-        </option>
-      ))}
-    </>
-  );
-  return (
-    <div className="space-y-3 text-sm">
-      <label className="block">
-        <span className="mb-1 block text-slate-600">Editor</span>
-        <select
-          value={editorId}
-          onChange={e => setEditorId(e.target.value)}
-          className={inputCls}
-        >
-          {opts}
-        </select>
-      </label>
-      <label className="block">
-        <span className="mb-1 block text-slate-600">Reviewer</span>
-        <select
-          value={reviewerId}
-          onChange={e => setReviewerId(e.target.value)}
-          className={inputCls}
-        >
-          {opts}
-        </select>
-      </label>
-      <button
-        disabled={busy}
-        onClick={() => onSave({ editorId, reviewerId })}
-        className="rounded-lg border border-slate-300 px-3 py-1.5 font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-      >
-        Save assignment
-      </button>
-      <label className="block">
-        <span className="mb-1 block text-slate-600">Priority</span>
-        <select
-          value={m.priority}
-          disabled={busy}
-          onChange={e => onPriority(e.target.value)}
-          className={inputCls}
-        >
-          {Object.entries(PRIORITIES).map(([k, v]) => (
-            <option key={k} value={k}>
-              {v.label}
-            </option>
-          ))}
-        </select>
-      </label>
-    </div>
-  );
-}
-
-// ===== Queue page =====
-const CARDS = [
-  { label: 'Total Submissions', match: () => true },
+const STAT_CARDS = [
   {
+    key: 'all',
+    label: 'Total Manuscripts',
+    match: () => true,
+    iconBg: 'bg-primary/20 text-dark',
+    icon: BookOpen,
+  },
+  {
+    key: 'pending',
     label: 'Pending Review',
-    match: m => ['submitted', 'screening', 'resubmitted'].includes(m.status),
+    match: m => !['published', 'approved', 'rejected', 'withdrawn'].includes(m.status),
+    iconBg: 'bg-amber-100 text-amber-800',
+    icon: ClockIcon,
   },
-  { label: 'In Review', match: m => m.status === 'in_review' },
   {
-    label: 'Revision Requested',
-    match: m => m.status === 'revision_requested',
+    key: 'published',
+    label: 'Published',
+    match: m => m.status === 'published' || m.status === 'approved',
+    iconBg: 'bg-emerald-100 text-emerald-700',
+    icon: CheckIcon,
   },
-  { label: 'Approved', match: m => m.status === 'approved' },
-  { label: 'Rejected', match: m => m.status === 'rejected' },
+  {
+    key: 'rejected',
+    label: 'Rejected',
+    match: m => m.status === 'rejected' || m.status === 'withdrawn',
+    iconBg: 'bg-rose-100 text-rose-700',
+    icon: XIcon,
+  },
 ];
-const sel =
-  'rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-500 focus:outline-none';
-const day = d => (d ? new Date(d).toLocaleDateString() : '—');
+
+function SortButton({ field, sort, onToggle, children }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(field)}
+      className="inline-flex items-center gap-1 hover:text-slate-900"
+    >
+      {children}
+      {sort.key === field ? (
+        sort.dir === 'asc' ? (
+          <ArrowUp size={12} />
+        ) : (
+          <ArrowDown size={12} />
+        )
+      ) : (
+        <ArrowUpDown size={12} className="text-slate-300" />
+      )}
+    </button>
+  );
+}
 
 function ManuscriptReview() {
-  const { currentUser } = useAuth();
-  const [items, setItems] = useState([]);
-  const [editors, setEditors] = useState([]);
-  const [state, setState] = useState('loading'); // loading | ready | error
+  const { users = [], can } = useAuth();
+  const canReview = can(PERMISSIONS.MANUSCRIPTS_REVIEW);
+
+  const [refreshTick, setRefreshTick] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
-  const [f, setF] = useState({
-    q: '',
-    status: '',
-    genre: '',
-    editor: '',
-    from: '',
-    to: '',
-  });
-  const [sort, setSort] = useState({ key: 'updatedAt', dir: 'desc' });
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all' | 'pending' | 'published' | 'rejected'
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [sort, setSort] = useState({ key: 'submittedAt', dir: 'desc' });
 
-  const authorName = useCallback(
-    id => authors.find(a => a.id === id)?.name ?? id ?? '—',
-    [],
+  const items = useMemo(() => {
+    void refreshTick;
+    return getAllNormalizedManuscripts();
+  }, [refreshTick]);
+
+  const resolveAuthor = useCallback(
+    manuscript => {
+      const userMatch = users.find(
+        u => String(u.id) === String(manuscript.authorId),
+      );
+      const authorMatch = authors.find(
+        a => String(a.id) === String(manuscript.authorId),
+      );
+      return {
+        name:
+          manuscript.authorName ||
+          userMatch?.name ||
+          authorMatch?.name ||
+          manuscript.authorId ||
+          'Unknown Author',
+        email:
+          manuscript.authorEmail ||
+          userMatch?.email ||
+          authorMatch?.email ||
+          'author@hosontoprokashon.com',
+        avatar:
+          userMatch?.avatar ||
+          authorMatch?.photo ||
+          'https://i.pravatar.cc/100?img=47',
+      };
+    },
+    [users],
   );
-  const editorName = useCallback(
-    id => editors.find(e => e.id === id)?.name ?? id ?? 'Unassigned',
-    [editors],
-  );
 
-  const load = useCallback(async () => {
-    setState('loading');
-    try {
-      const [list, eds] = await Promise.all([
-        listManuscripts(),
-        getEditors(currentUser),
-      ]);
-      setItems(list.filter(m => canAccessManuscript(m, currentUser)));
-      setEditors(eds);
-      setState('ready');
-    } catch {
-      setState('error');
-    }
-  }, [currentUser]);
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  const genres = useMemo(
+  const categories = useMemo(
     () => [...new Set(items.map(m => m.type).filter(Boolean))],
     [items],
   );
-  const setFilter = (k, v) => {
-    setF(p => ({ ...p, [k]: v }));
-    setPage(1);
-  };
 
   const rows = useMemo(() => {
-    const q = f.q.trim().toLowerCase();
-    const val = m =>
-      ({
-        title: m.title,
-        author: authorName(m.authorId),
-        type: m.type,
-        submittedAt: m.submittedAt,
-        editor: editorName(m.assignedEditorId),
-        updatedAt: m.updatedAt,
-        status: m.status,
-        priority: PRIORITIES[m.priority]?.rank ?? 1,
-      })[sort.key];
-    return items
-      .filter(
-        m =>
-          !q ||
-          [m.title, m.id, authorName(m.authorId)].some(s =>
-            String(s ?? '')
-              .toLowerCase()
-              .includes(q),
-          ),
-      )
-      .filter(m => !f.status || m.status === f.status)
-      .filter(m => !f.genre || m.type === f.genre)
-      .filter(
-        m =>
-          !f.editor ||
-          (f.editor === 'none'
-            ? !m.assignedEditorId
-            : m.assignedEditorId === f.editor),
-      )
-      .filter(
-        m => !f.from || (m.submittedAt && m.submittedAt.slice(0, 10) >= f.from),
-      )
-      .filter(
-        m => !f.to || (m.submittedAt && m.submittedAt.slice(0, 10) <= f.to),
-      )
-      .sort((a, b) => {
-        const x = val(a) ?? '',
-          y = val(b) ?? '';
-        return (x > y ? 1 : x < y ? -1 : 0) * (sort.dir === 'asc' ? 1 : -1);
-      });
-  }, [items, f, sort, authorName, editorName]);
+    const q = search.trim().toLowerCase();
+    const toDateKey = value => {
+      const parsed = parseFlexibleDate(value);
+      return parsed ? parsed.toISOString() : '';
+    };
 
-  const pages = Math.max(1, Math.ceil(rows.length / pageSize));
-  const current = Math.min(page, pages);
-  const visible = rows.slice((current - 1) * pageSize, current * pageSize);
+    const filtered = items
+      .filter(m => {
+        if (statusFilter === 'pending') {
+          return !['published', 'approved', 'rejected', 'withdrawn'].includes(
+            m.status,
+          );
+        }
+        if (statusFilter === 'published') {
+          return m.status === 'published' || m.status === 'approved';
+        }
+        if (statusFilter === 'rejected') {
+          return m.status === 'rejected' || m.status === 'withdrawn';
+        }
+        return true;
+      })
+      .filter(m => !categoryFilter || m.type === categoryFilter)
+      .filter(m => {
+        if (!q) return true;
+        const author = resolveAuthor(m);
+        return [m.title, m.type, m.id, author.name, m.fileName].some(v =>
+          String(v ?? '')
+            .toLowerCase()
+            .includes(q),
+        );
+      });
+
+    return [...filtered].sort((a, b) => {
+      const getVal = item => {
+        if (sort.key === 'title') return item.title || '';
+        if (sort.key === 'author') return resolveAuthor(item).name;
+        if (sort.key === 'type') return item.type || '';
+        if (sort.key === 'status') return item.status || '';
+        return toDateKey(item.submittedAt);
+      };
+      const x = getVal(a);
+      const y = getVal(b);
+      return (x > y ? 1 : x < y ? -1 : 0) * (sort.dir === 'asc' ? 1 : -1);
+    });
+  }, [items, search, statusFilter, categoryFilter, sort, resolveAuthor]);
+
+  const selectedManuscript = useMemo(
+    () => items.find(m => m.id === selectedId) || null,
+    [items, selectedId],
+  );
 
   const toggleSort = key =>
     setSort(s => ({
       key,
       dir: s.key === key && s.dir === 'asc' ? 'desc' : 'asc',
     }));
-  const Th = ({ k, children }) => (
-    <th className="px-4 py-3 text-left font-medium">
-      {k ? (
-        <button
-          onClick={() => toggleSort(k)}
-          className="inline-flex items-center gap-1 hover:text-slate-900"
-        >
-          {children}
-          {sort.key === k ? (
-            sort.dir === 'asc' ? (
-              <ArrowUp size={12} />
-            ) : (
-              <ArrowDown size={12} />
-            )
-          ) : (
-            <ArrowUpDown size={12} className="text-slate-300" />
-          )}
-        </button>
-      ) : (
-        children
-      )}
-    </th>
-  );
-
-  const exportCsv = () => {
-    const head = [
-      'ID',
-      'Title',
-      'Author',
-      'Genre',
-      'Submitted',
-      'Editor',
-      'Last updated',
-      'Status',
-      'Priority',
-    ];
-    const esc = v => `"${String(v ?? '').replaceAll('"', '""')}"`;
-    const body = rows.map(m =>
-      [
-        m.id,
-        m.title,
-        authorName(m.authorId),
-        m.type,
-        m.submittedAt,
-        editorName(m.assignedEditorId),
-        m.updatedAt,
-        STATUS_META[m.status]?.label,
-        PRIORITIES[m.priority]?.label,
-      ]
-        .map(esc)
-        .join(','),
-    );
-    const url = URL.createObjectURL(
-      new Blob([[head.map(esc).join(','), ...body].join('\n')], {
-        type: 'text/csv',
-      }),
-    );
-    const a = Object.assign(document.createElement('a'), {
-      href: url,
-      download: `manuscripts-${new Date().toISOString().slice(0, 10)}.csv`,
-    });
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  if (selectedId)
-    return (
-      <ManuscriptDetails
-        manuscriptId={selectedId}
-        onBack={() => setSelectedId(null)}
-        onChanged={load}
-      />
-    );
 
   return (
-    <>
+    <div className="space-y-6">
       <PageHeader
-        title="Manuscript Review Queue"
-        description="Review submitted manuscripts from authors and provide editorial feedback."
+        title="Author Manuscripts"
+        description="Browse author manuscripts, click any row to read or inspect the submission, and publish or reject directly."
       />
 
-      <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        {CARDS.map(c => (
-          <div
-            key={c.label}
-            className="rounded-xl border border-slate-200 bg-white p-4"
-          >
-            <p className="text-xs text-slate-500">{c.label}</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">
-              {state === 'ready' ? items.filter(c.match).length : '–'}
-            </p>
-          </div>
-        ))}
+      {/* Clickable Summary Stat Cards */}
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        {STAT_CARDS.map(card => {
+          const Icon = card.icon;
+          const count = items.filter(card.match).length;
+          const isActive = statusFilter === card.key;
+          return (
+            <button
+              key={card.key}
+              type="button"
+              onClick={() => setStatusFilter(card.key)}
+              className={`rounded-2xl border bg-white p-4 text-left shadow-xs transition ${
+                isActive
+                  ? 'border-primary ring-2 ring-primary/30'
+                  : 'border-slate-200/80 hover:border-slate-300'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold text-slate-500">
+                    {card.label}
+                  </p>
+                  <p className="mt-1 font-heading text-2xl font-bold text-slate-900">
+                    {count}
+                  </p>
+                </div>
+                <span
+                  className={`flex h-10 w-10 items-center justify-center rounded-xl ${card.iconBg}`}
+                >
+                  <Icon size={18} />
+                </span>
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      <div className="rounded-xl border border-slate-200 bg-white">
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 p-4">
-          <div className="relative min-w-[220px] flex-1">
+      {/* Directory Table */}
+      <section className="rounded-2xl border border-slate-200/80 bg-white shadow-xs">
+        <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="relative w-full sm:max-w-xs">
             <Search
-              size={16}
-              className="absolute left-3 top-2.5 text-slate-400"
+              size={15}
+              className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
             />
             <input
-              value={f.q}
-              onChange={e => setFilter('q', e.target.value)}
-              placeholder="Search title, author or manuscript ID…"
-              className={`${sel} w-full pl-9`}
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search book name, author, category..."
+              className="w-full rounded-xl border border-slate-200 bg-slate-50/50 py-2 pl-9 pr-3 text-sm outline-none transition focus:border-primary focus:bg-white"
             />
           </div>
-          <select
-            className={sel}
-            value={f.status}
-            onChange={e => setFilter('status', e.target.value)}
-            aria-label="Status"
-          >
-            <option value="">All statuses</option>
-            {Object.entries(STATUS_META).map(([k, v]) => (
-              <option key={k} value={k}>
-                {v.label}
-              </option>
-            ))}
-          </select>
-          <select
-            className={sel}
-            value={f.genre}
-            onChange={e => setFilter('genre', e.target.value)}
-            aria-label="Genre"
-          >
-            <option value="">All genres</option>
-            {genres.map(g => (
-              <option key={g}>{g}</option>
-            ))}
-          </select>
-          <select
-            className={sel}
-            value={f.editor}
-            onChange={e => setFilter('editor', e.target.value)}
-            aria-label="Editor"
-          >
-            <option value="">All editors</option>
-            <option value="none">Unassigned</option>
-            {editors.map(e => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
-          </select>
-          <input
-            type="date"
-            className={sel}
-            value={f.from}
-            onChange={e => setFilter('from', e.target.value)}
-            aria-label="Submitted from"
-          />
-          <input
-            type="date"
-            className={sel}
-            value={f.to}
-            onChange={e => setFilter('to', e.target.value)}
-            aria-label="Submitted to"
-          />
-          <button
-            onClick={exportCsv}
-            disabled={!rows.length}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
-          >
-            <Download size={15} />
-            Export CSV
-          </button>
-        </div>
 
-        {state === 'loading' && (
-          <p className="p-10 text-center text-sm text-slate-500">
-            Loading manuscripts…
-          </p>
-        )}
-        {state === 'error' && (
-          <p className="p-10 text-center text-sm text-red-600">
-            Could not load manuscripts.{' '}
-            <button onClick={load} className="underline">
-              Try again
-            </button>
-          </p>
-        )}
-        {state === 'ready' && rows.length === 0 && (
-          <p className="p-10 text-center text-sm text-slate-500">
-            {items.length
-              ? 'No manuscripts match these filters.'
-              : 'No manuscripts have been submitted yet.'}
-          </p>
-        )}
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={categoryFilter}
+              onChange={e => setCategoryFilter(e.target.value)}
+              aria-label="Filter by category"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-primary"
+            >
+              <option value="">All Categories</option>
+              {categories.map(cat => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
 
-        {state === 'ready' && rows.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-xs text-slate-500">
-                <tr>
-                  <Th k="title">Manuscript</Th>
-                  <Th k="author">Author</Th>
-                  <Th k="type">Genre</Th>
-                  <Th k="submittedAt">Submitted</Th>
-                  <Th k="editor">Editor</Th>
-                  <Th k="updatedAt">Last updated</Th>
-                  <Th k="status">Status</Th>
-                  <Th k="priority">Priority</Th>
-                  <Th>Actions</Th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {visible.map(m => (
-                  <tr key={m.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-slate-800">{m.title}</p>
-                      <p className="text-xs text-slate-400">{m.id}</p>
-                    </td>
-                    <td className="px-4 py-3">{authorName(m.authorId)}</td>
-                    <td className="px-4 py-3">{m.type}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {day(m.submittedAt)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {editorName(m.assignedEditorId)}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {day(m.updatedAt)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusPill status={m.status} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <PriorityPill priority={m.priority} />
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => setSelectedId(m.id)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-white"
-                      >
-                        <Eye size={14} />
-                        Open
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {state === 'ready' && rows.length > 0 && (
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 p-4 text-sm text-slate-600">
-            <label className="flex items-center gap-2">
-              Rows per page
-              <select
-                className={sel}
-                value={pageSize}
-                onChange={e => {
-                  setPageSize(Number(e.target.value));
-                  setPage(1);
-                }}
-              >
-                {[10, 25, 50, 100].map(n => (
-                  <option key={n}>{n}</option>
-                ))}
-              </select>
-            </label>
-            <span>
-              {(current - 1) * pageSize + 1}–
-              {Math.min(current * pageSize, rows.length)} of {rows.length}
-            </span>
-            <div className="flex gap-2">
-              <button
-                disabled={current === 1}
-                onClick={() => setPage(current - 1)}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40"
-              >
-                Previous
-              </button>
-              <button
-                disabled={current === pages}
-                onClick={() => setPage(current + 1)}
-                className="rounded-lg border border-slate-300 px-3 py-1.5 disabled:opacity-40"
-              >
-                Next
-              </button>
+            <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1">
+              {[
+                { key: 'all', label: 'All' },
+                { key: 'pending', label: 'Pending' },
+                { key: 'published', label: 'Published' },
+                { key: 'rejected', label: 'Rejected' },
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setStatusFilter(tab.key)}
+                  className={`rounded-lg px-3 py-1 text-xs font-semibold transition ${
+                    statusFilter === tab.key
+                      ? 'bg-white text-slate-900 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden overflow-x-auto md:block">
+          <table className="w-full text-left text-sm">
+            <thead className="border-b border-slate-100 bg-slate-50/70 text-[11px] font-semibold  tracking-wider text-slate-500">
+              <tr>
+                <th className="px-5 py-3.5">
+                  <SortButton field="title" sort={sort} onToggle={toggleSort}>
+                    Book Name
+                  </SortButton>
+                </th>
+                <th className="px-4 py-3.5">
+                  <SortButton field="author" sort={sort} onToggle={toggleSort}>
+                    Author
+                  </SortButton>
+                </th>
+                <th className="px-4 py-3.5">
+                  <SortButton field="type" sort={sort} onToggle={toggleSort}>
+                    Category
+                  </SortButton>
+                </th>
+                <th className="px-4 py-3.5">Submit as</th>
+                <th className="px-4 py-3.5">
+                  <SortButton field="submittedAt" sort={sort} onToggle={toggleSort}>
+                    Submitted
+                  </SortButton>
+                </th>
+                <th className="px-4 py-3.5">
+                  <SortButton field="status" sort={sort} onToggle={toggleSort}>
+                    Status
+                  </SortButton>
+                </th>
+                <th className="px-5 py-3.5 text-right">Details</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {rows.map(m => {
+                const author = resolveAuthor(m);
+                const isFile = m.submitMode === 'file';
+                return (
+                  <tr
+                    key={m.id}
+                    onClick={() => setSelectedId(m.id)}
+                    className="group cursor-pointer transition hover:bg-amber-50/40"
+                  >
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-dark">
+                          <BookOpen size={17} />
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate font-heading text-sm font-bold text-slate-900">
+                            {m.title}
+                          </p>
+                          <p className="line-clamp-1 text-xs ">
+                            {m.summary || m.comments || m.id}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-2.5">
+                        <img
+                          src={author.avatar}
+                          alt={author.name}
+                          className="h-8 w-8 rounded-full object-cover ring-1 ring-slate-200"
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-semibold  sm:text-sm">
+                            {author.name}
+                          </p>
+                          <p className="truncate text-[11px] ">
+                            {author.email}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="whitespace-nowrap px-4 py-4">
+                      <span className="inline-flex rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-semibold ">
+                        {m.type || 'General'}
+                      </span>
+                    </td>
+
+                    <td className="px-4 py-4">
+                      <div className="space-y-0.5">
+                        <span
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                            isFile
+                              ? 'bg-blue-50 text-blue-700'
+                              : 'bg-amber-50 text-amber-800'
+                          }`}
+                        >
+                          {isFile ? (
+                            <>
+                              <Upload size={11} /> Upload File
+                            </>
+                          ) : (
+                            <>
+                              <PenTool size={11} /> Write Text
+                            </>
+                          )}
+                        </span>
+                        <p className="max-w-[160px] truncate text-[11px] text-slate-500">
+                          {isFile
+                            ? m.fileName || 'Document'
+                            : m.wordCount
+                              ? `${m.wordCount.toLocaleString()} words`
+                              : 'Written manuscript'}
+                        </p>
+                      </div>
+                    </td>
+
+                    <td className="whitespace-nowrap px-4 py-4 text-xs font-medium text-slate-600">
+                      {formatDay(m.submittedAt)}
+                    </td>
+
+                    <td className="whitespace-nowrap px-4 py-4">
+                      <StatusPill status={m.status} />
+                    </td>
+
+                    <td className="whitespace-nowrap px-5 py-4 text-right">
+                      <span className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 transition group-hover:text-dark">
+                        <span>Read</span>
+                        <ArrowRight
+                          size={14}
+                          className="transition group-hover:translate-x-0.5"
+                        />
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Cards */}
+        <div className="grid gap-3 p-4 md:hidden">
+          {rows.map(m => {
+            const author = resolveAuthor(m);
+            const isFile = m.submitMode === 'file';
+            return (
+              <div
+                key={m.id}
+                onClick={() => setSelectedId(m.id)}
+                className="cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-xs transition hover:border-primary"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate font-heading text-sm font-bold text-slate-900">
+                      {m.title}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      {author.name} · {m.type}
+                    </p>
+                  </div>
+                  <StatusPill status={m.status} />
+                </div>
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                  <span className="inline-flex items-center gap-1 font-medium text-slate-700">
+                    {isFile ? (
+                      <>
+                        <Upload size={12} /> Upload File
+                      </>
+                    ) : (
+                      <>
+                        <PenTool size={12} /> Write Text
+                      </>
+                    )}
+                  </span>
+                  <span>Submitted {formatDay(m.submittedAt)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {rows.length === 0 && (
+          <div className="py-14 text-center">
+            <BookOpen size={36} className="mx-auto text-slate-300" />
+            <p className="mt-2 text-sm font-semibold text-slate-700">
+              No manuscripts found
+            </p>
+            {/* <p className="text-xs text-slate-400">
+              Try clearing your filters or check back when authors submit new work.
+            </p> */}
+          </div>
         )}
-      </div>
-    </>
+      </section>
+
+      {selectedManuscript && (
+        <ManuscriptModal
+          key={selectedManuscript.id}
+          manuscript={selectedManuscript}
+          authorInfo={resolveAuthor(selectedManuscript)}
+          canReview={canReview}
+          onClose={() => setSelectedId(null)}
+          onDecisionUpdated={() => setRefreshTick(t => t + 1)}
+        />
+      )}
+    </div>
   );
 }
 

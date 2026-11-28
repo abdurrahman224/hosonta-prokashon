@@ -66,6 +66,7 @@ export default function AddBook() {
   // Form state matching Image 1: Products Description
   const [productName, setProductName] = useState('');
   const [category, setCategory] = useState('Novel');
+  const [extraCategories, setExtraCategories] = useState([]);
   const [customCategory, setCustomCategory] = useState('');
   const [publisher, setPublisher] = useState(urlPublisher || 'হসন্ত প্রকাশন');
   const [customPublisher, setCustomPublisher] = useState('');
@@ -83,7 +84,7 @@ export default function AddBook() {
 
   // Form state matching Image 2: Pricing & Availability
   const [price, setPrice] = useState('350.00');
-  const [discount, setDiscount] = useState('0');
+  const [discount, setDiscount] = useState('25');
   const [stockQuantity, setStockQuantity] = useState(25);
   const [availabilityStatus, setAvailabilityStatus] = useState('In Stock');
 
@@ -106,7 +107,11 @@ export default function AddBook() {
   useEffect(() => {
     if (existingBook) {
       setProductName(existingBook.title || '');
-      setCategory(existingBook.category || 'Novel');
+      const existingCats = Array.isArray(existingBook.categories)
+        ? existingBook.categories
+        : [existingBook.category].filter(Boolean);
+      setCategory(existingCats[0] || 'Novel');
+      setExtraCategories(existingCats.slice(1));
       setPublisher(existingBook.publisher || 'Hosonta Prokashon');
       setAuthorName(existingBook.author || '');
       setTotalPages(String(existingBook.pages || '150'));
@@ -178,6 +183,13 @@ export default function AddBook() {
         return;
       }
       setSamplePdfFile(file);
+      if (file.size <= 2 * 1024 * 1024) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setSamplePdfUrl(String(reader.result || ''));
+        };
+        reader.readAsDataURL(file);
+      }
       toast.success(`PDF selected: ${file.name}`);
     }
   };
@@ -221,6 +233,10 @@ export default function AddBook() {
         category === 'Other' && customCategory.trim()
           ? customCategory.trim()
           : category;
+      const selectedCategories = [
+        selectedCategory,
+        ...extraCategories.filter(cat => cat && cat !== selectedCategory),
+      ].filter(Boolean);
 
       const selectedPublisher =
         publisher === 'Other Publisher' && customPublisher.trim()
@@ -243,7 +259,8 @@ export default function AddBook() {
         title: productName.trim() || 'Untitled Book',
         author: authorName.trim() || 'Unknown Author',
         publisher: selectedPublisher,
-        category: selectedCategory,
+        category: selectedCategories[0] || selectedCategory,
+        categories: selectedCategories,
         pages: parseInt(totalPages, 10) || 0,
         coverType,
         publishedYear: parseInt(publishingYear, 10) || new Date().getFullYear(),
@@ -402,6 +419,38 @@ export default function AddBook() {
                   className="mt-2 h-10 w-full rounded-xl border border-dark/15 bg-white px-4 text-sm text-dark focus:border-primary focus:outline-none"
                 />
               )}
+              <div className="mt-2">
+                <p className="text-[11px] font-medium text-dark/60 mb-1.5">
+                  Additional Categories (optional)
+                </p>
+                <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto">
+                  {categoryOptions
+                    .filter(cat => cat !== category)
+                    .map(cat => {
+                      const active = extraCategories.includes(cat);
+                      return (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() =>
+                            setExtraCategories(prev =>
+                              prev.includes(cat)
+                                ? prev.filter(item => item !== cat)
+                                : [...prev, cat],
+                            )
+                          }
+                          className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition ${
+                            active
+                              ? 'bg-primary text-dark'
+                              : 'border border-dark/15 bg-white text-dark/70 hover:border-primary'
+                          }`}
+                        >
+                          {cat}
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
             </div>
           </div>
 

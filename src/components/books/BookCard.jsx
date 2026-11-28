@@ -3,33 +3,33 @@ import toast from 'react-hot-toast';
 import { Link } from 'react-router-dom';
 import { useCart } from '../../context/useCart';
 import { useWishlist } from '../../context/useWishlist';
-import { useData } from '../../context/useData';
 import { motion } from 'framer-motion';
-import StarRating from '../reviews/StarRating';
 import useFormat from '../../hooks/useFormat';
+import { getBookPath } from '../../utils/bookSlug';
+import { getBookPricing } from '../../utils/bookHelpers';
 
 const styles = {
   default: {
-    badge: 'left-3 top-3 px-3 py-1 text-xs',
-    wish: 'right-3 top-3 p-2 text-lg',
-    body: 'p-4',
-    title: 'text-lg',
-    author: 'mt-1 text-sm',
+    badge: 'left-2.5 top-2.5 px-2.5 py-0.5 text-[11px]',
+    wish: 'right-2.5 top-2.5 p-2 text-base',
+    body: 'p-3.5',
+    title: 'text-sm sm:text-[15px]',
+    author: 'mt-0.5 text-xs',
     rating: 'mt-2 flex text-sm',
-    footer: 'pt-4',
-    price: 'text-xl',
-    cart: 'gap-2 px-3 py-2 text-sm',
+    footer: 'pt-3',
+    price: 'text-base',
+    cart: 'gap-1.5 px-3 py-2 text-xs sm:text-sm',
     cartLabel: '',
   },
   compact: {
     badge:
-      'left-1.5 top-1.5 px-1.5 py-0.5 text-[10px] sm:left-2 sm:top-2 sm:px-2 sm:text-xs',
+      'left-1.5 top-1.5 px-1.5 py-0.5 text-[10px] sm:left-2 sm:top-2 sm:px-2 sm:text-[11px]',
     wish: 'right-1.5 top-1.5 p-1.5 text-sm sm:right-2 sm:top-2 sm:p-2 sm:text-base',
-    body: 'p-2 sm:p-3',
+    body: 'p-2.5 sm:p-3',
     title: 'text-xs sm:text-sm',
     author: 'mt-0.5 text-[11px] sm:text-xs',
     rating: 'mt-1 hidden text-xs sm:flex',
-    footer: 'pt-2 sm:pt-3',
+    footer: 'pt-2 sm:pt-2.5',
     price: 'text-sm sm:text-base',
     cart: 'p-2 text-sm sm:p-2.5',
     cartLabel: 'hidden',
@@ -39,12 +39,11 @@ const styles = {
 function BookCard({ book, compact = false }) {
   const { addToCart } = useCart();
   const { isInWishlist, toggleWishlist } = useWishlist();
-  const { getBookRatingStats } = useData();
-  const { formatCurrency } = useFormat();
-  const ratingStats = getBookRatingStats(book.id);
+  const { formatCurrency, formatNumber } = useFormat();
   const outOfStock = Number(book.stock ?? 0) <= 0;
   const wished = isInWishlist(book.id);
   const s = compact ? styles.compact : styles.default;
+  const { originalPrice, sellingPrice, discountPercent, hasDiscount } = getBookPricing(book);
 
   const handleCart = () => {
     const result = addToCart(book);
@@ -66,7 +65,7 @@ function BookCard({ book, compact = false }) {
       whileHover={{ y: -6 }}
       whileTap={{ scale: 0.985 }}
       transition={{ duration: 0.2 }}
-      className="group relative flex h-full flex-col overflow-hidden rounded-xl border border-dark/10 bg-white shadow-sm transition-shadow duration-300 hover:shadow-xl"
+      className="group/card relative flex h-full flex-col overflow-hidden rounded-xl border border-dark/10 bg-white shadow-sm transition-shadow duration-300 hover:shadow-xl"
     >
       <div className="relative aspect-[3/4] overflow-hidden bg-dark-gray">
         <img
@@ -75,12 +74,20 @@ function BookCard({ book, compact = false }) {
           width="400"
           height="533"
           loading="lazy"
-          className={`h-full w-full object-cover transition duration-500 group-hover:scale-105 ${
+          className={`h-full w-full object-cover transition duration-500 group-hover/card:scale-105 ${
             outOfStock ? 'opacity-60 grayscale' : ''
           }`}
         />
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-black/20 to-transparent" />
+
+        {hasDiscount && (
+          <span
+            className={`pointer-events-none absolute z-10 inline-flex items-center rounded-full bg-red-600 font-bold text-white shadow-sm ${s.badge}`}
+          >
+            {formatNumber(discountPercent)}% ডিসকাউন্ট
+          </span>
+        )}
 
         {outOfStock && (
           <span className="absolute bottom-3 left-3 rounded-full bg-dark/80 px-3 py-1 text-xs font-medium text-white">
@@ -105,7 +112,7 @@ function BookCard({ book, compact = false }) {
           className={`font-heading text-sm  leading-snug  truncate  ${s.title}`}
         >
           <Link
-            to={`/books/${book.id}`}
+            to={getBookPath(book)}
             className="transition-colors hover:text-primary-hover after:absolute after:inset-0 after:content-['']"
           >
             {book.title?.bn || book.title}
@@ -126,11 +133,18 @@ function BookCard({ book, compact = false }) {
         </div> */}
 
         <div
-          className={`mt-auto flex items-center justify-between gap-1 ${s.footer}`}
+          className={`mt-auto flex items-center justify-between gap-1.5 ${s.footer}`}
         >
-          <span className={`font-heading font-bold text-dark ${s.price}`}>
-            {formatCurrency(book.price)}
-          </span>
+          <div className="flex flex-wrap items-baseline gap-x-1.5">
+            <span className={`font-heading font-bold text-dark ${s.price}`}>
+              {formatCurrency(sellingPrice)}
+            </span>
+            {hasDiscount && (
+              <span className="text-[11px] text-dark-muted line-through sm:text-xs">
+                {formatCurrency(originalPrice)}
+              </span>
+            )}
+          </div>
 
           <button
             type="button"

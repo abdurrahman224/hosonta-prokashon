@@ -17,6 +17,7 @@ import StarRating from '../../../components/reviews/StarRating';
 import { useAuth } from '../../../context/useAuth';
 import { useData } from '../../../context/useData';
 import books from '../../../data/books';
+import { getBookPath } from '../../../utils/bookSlug';
 
 const statusTabs = [
   { value: '', label: 'সব' },
@@ -181,7 +182,7 @@ function MyReviews() {
               <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
                 {review.status === 'rejected' && (
                   <IconLink
-                    to={`/books/${review.bookId}#reviews`}
+                    to={`${getBookPath(review.bookId, books)}#reviews`}
                     label="সংশোধন করে আবার জমা দিন"
                     tone="primary"
                   >
@@ -190,14 +191,14 @@ function MyReviews() {
                 )}
                 {/* মোবাইলে জায়গা বাঁচাতে "দেখুন" লুকানো */}
                 <IconLink
-                  to={`/books/${review.bookId}#reviews`}
+                  to={`${getBookPath(review.bookId, books)}#reviews`}
                   label="রিভিউ দেখুন"
                   className="hidden sm:flex"
                 >
                   <FiEye />
                 </IconLink>
                 <IconLink
-                  to={`/books/${review.bookId}#reviews`}
+                  to={`${getBookPath(review.bookId, books)}#reviews`}
                   label="রিভিউ এডিট করুন"
                 >
                   <FiEdit2 />

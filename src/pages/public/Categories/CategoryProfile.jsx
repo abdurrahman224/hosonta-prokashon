@@ -13,17 +13,7 @@ import {
 } from '../../../components/filters/FilterComponents';
 import { buildActiveChips } from '../../../components/filters/FilterUtils';
 import useFormat from '../../../hooks/useFormat';
-
-const toNumber = value =>
-  Number(String(value).replace(/[০-৯]/g, digit =>
-    '০১২৩৪৫৬৭৮৯'.indexOf(digit),
-  ).replace(/[^\d]/g, '')) || 0;
-
-const toText = value =>
-  (value && typeof value === 'object'
-    ? Object.values(value).join(' ')
-    : String(value ?? '')
-  ).toLowerCase();
+import { bookHasCategory, getBookPricing } from '../../../utils/bookHelpers';
 
 function CategoryProfile() {
   const { name } = useParams();
@@ -34,15 +24,12 @@ function CategoryProfile() {
   const [filters, setFilters] = useState({ price: [0, 0], category: categoryName, author: '' });
 
   const categoryBooks = useMemo(
-    () =>
-      books.filter(book =>
-        toText(book.category).includes(categoryName.toLowerCase()),
-      ),
+    () => books.filter(book => bookHasCategory(book, categoryName)),
     [categoryName],
   );
 
   const priceMax = useMemo(() => {
-    const max = Math.max(0, ...categoryBooks.map(book => toNumber(book.price)));
+    const max = Math.max(0, ...categoryBooks.map(book => getBookPricing(book).sellingPrice));
     return (Math.ceil(max / 100) * 100) || 100;
   }, [categoryBooks]);
 
@@ -57,9 +44,7 @@ function CategoryProfile() {
   );
 
   const categoryOptions = categoryNames.map(nameItem => {
-    const count = books.filter(book =>
-      toText(book.category).includes(nameItem.toLowerCase()),
-    ).length;
+    const count = books.filter(book => bookHasCategory(book, nameItem)).length;
     return { id: nameItem, label: nameItem, count };
   });
 
@@ -88,10 +73,9 @@ function CategoryProfile() {
 
   const visibleBooks = useMemo(() => {
     const filtered = categoryBooks.filter(book => {
-      const price = toNumber(book.price);
+      const price = getBookPricing(book).sellingPrice;
       if (price < priceRange[0] || price > priceRange[1]) return false;
-      if (filters.category &&
-        !toText(book.category).includes(String(filters.category).toLowerCase())) return false;
+      if (filters.category && !bookHasCategory(book, filters.category)) return false;
       if (filters.author && String(book.authorId) !== String(filters.author)) return false;
       return true;
     });
@@ -103,8 +87,8 @@ function CategoryProfile() {
           'bn',
         );
       }
-      if (sort === 'price-low') return toNumber(first.price) - toNumber(second.price);
-      if (sort === 'price-high') return toNumber(second.price) - toNumber(first.price);
+      if (sort === 'price-low') return getBookPricing(first).sellingPrice - getBookPricing(second).sellingPrice;
+      if (sort === 'price-high') return getBookPricing(second).sellingPrice - getBookPricing(first).sellingPrice;
       return Number(second.id) - Number(first.id);
     });
   }, [categoryBooks, filters.author, filters.category, priceRange, sort]);

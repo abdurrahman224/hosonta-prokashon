@@ -7,7 +7,6 @@ import {
   FiChevronDown,
   FiChevronLeft,
   FiChevronRight,
-  FiDollarSign,
   FiDownload,
   FiEdit2,
   FiPlus,
@@ -16,7 +15,6 @@ import {
   FiTrendingDown,
   FiTrendingUp,
   FiUsers,
-  FiX,
 } from 'react-icons/fi';
 import ConfirmModal from '../../../components/dashboard/ConfirmModal';
 import DataTable from '../../../components/dashboard/DataTable';
@@ -49,10 +47,16 @@ import {
   updateEmployeeExpense,
   updateMarketingCost,
 } from '../../../utils/costStorage';
+import {
+  getExpenseProfiles,
+  removeSyncedCostFromProfile,
+  resolveProfileIdFromCategory,
+  syncCostToExpenseProfile,
+} from '../../../utils/costProfilesStorage';
 import { formatCurrency } from '../../../utils/format';
 
 export default function TotalCost() {
-  const { users } = useAuth();
+  const { currentUser, users } = useAuth();
 
   // Current month default in YYYY-MM
   const [selectedMonth, setSelectedMonth] = useState(() =>
@@ -122,19 +126,14 @@ export default function TotalCost() {
     setSelectedMonth(`${nextYear}-${nextMonth}`);
   };
 
-  // Month label in Bengali & English
+  // Month label
   const monthDisplayLabel = useMemo(() => {
     const [year, month] = selectedMonth.split('-').map(Number);
     const d = new Date(year, month - 1, 1);
-    const bengaliMonth = d.toLocaleDateString('bn-BD', {
+    return d.toLocaleDateString('en-US', {
       month: 'long',
       year: 'numeric',
     });
-    const englishMonth = d.toLocaleDateString('en-US', {
-      month: 'long',
-      year: 'numeric',
-    });
-    return `${bengaliMonth} (${englishMonth})`;
   }, [selectedMonth]);
 
   // Group all costs by book: one entry per book with its total & breakdown.
@@ -187,34 +186,35 @@ export default function TotalCost() {
     else if (type === 'employee') deleteEmployeeExpense(item.id);
     else if (type === 'marketing') deleteMarketingCost(item.id);
 
+    removeSyncedCostFromProfile(item.id);
     setDeleteConfirm(null);
     triggerRefresh();
-    toast.success('রেকর্ডটি সফলভাবে মুছে ফেলা হয়েছে।');
+    toast.success('Record deleted.');
   };
 
   // Tabs definition
   const tabs = [
     {
       id: 'book',
-      label: 'বই প্রকাশনা খরচ',
+      label: 'Book Production',
       icon: FiBookOpen,
       count: bookGroups.length,
     },
     {
       id: 'author',
-      label: 'লেখক কমিশন',
+      label: 'Author Royalty',
       icon: FiUsers,
       count: authorCommissions.length,
     },
     {
       id: 'employee',
-      label: 'কর্মচারী ব্যয়',
+      label: 'Staff & Office',
       icon: FiBriefcase,
       count: employeeExpenses.length,
     },
     {
       id: 'marketing',
-      label: 'মার্কেটিং ব্যয়',
+      label: 'Marketing',
       icon: FiTrendingUp,
       count: marketingCosts.length,
     },
@@ -225,7 +225,7 @@ export default function TotalCost() {
     <button
       type="button"
       onClick={() => setFormModal({ type, item: null })}
-      className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-1.5 text-xs font-bold text-dark shadow-2xs transition hover:bg-primary-hover"
+      className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-dark transition hover:bg-primary-hover"
     >
       <FiPlus size={14} />
       <span>{label}</span>
@@ -235,25 +235,27 @@ export default function TotalCost() {
   // Shared Edit / Delete column
   const actionsColumn = type => ({
     key: 'actions',
-    header: 'অ্যাকশন (Actions)',
+    header: 'Actions',
     align: 'right',
     render: item => (
-      <div className="flex items-center justify-end gap-1.5">
+      <div className="flex items-center justify-end gap-1">
         <button
           type="button"
           onClick={() => setFormModal({ type, item })}
-          className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-          title="সম্পাদনা করুন"
+          className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+          title="Edit"
+          aria-label="Edit entry"
         >
-          <FiEdit2 size={13} />
+          <FiEdit2 size={14} />
         </button>
         <button
           type="button"
           onClick={() => setDeleteConfirm({ type, item })}
-          className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-          title="মুছে ফেলুন"
+          className="rounded-lg p-1.5 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"
+          title="Delete"
+          aria-label="Delete entry"
         >
-          <FiTrash2 size={13} />
+          <FiTrash2 size={14} />
         </button>
       </div>
     ),
@@ -265,188 +267,137 @@ export default function TotalCost() {
     `space-y-3 ${activeTab === id ? '' : 'hidden print:block'}`;
 
   return (
-    <div className="space-y-8 print:space-y-4">
+    <div className="space-y-6 print:space-y-4">
       {/* Page Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between print:hidden">
-        <div>
-          <PageHeader
-            title="টোটাল কস্ট (Total Business Costs)"
-            description="ব্যবসায়ের সকল প্রকাশনা, রয়্যালটি কমিশন, কর্মচারী বেতন ও মার্কেটিং খরচের সমন্বিত হিসাব ও ব্যবস্থাপনা।"
-          />
-        </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between print:hidden">
+        <PageHeader
+          title="Total Cost"
+          description="Monthly expenses for book production, royalties, staff, and marketing."
+        />
 
-        {/* Export Buttons */}
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => exportMonthlyReportCsv(selectedMonth)}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50"
-            title="এক্সেল CSV ডাউনলোড"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
           >
             <FiDownload size={14} />
-            <span>Excel / CSV</span>
+            <span>CSV</span>
           </button>
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-2xs transition hover:bg-slate-50"
-            title="রিপোর্ট প্রিন্ট বা PDF সংরক্ষণ"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
           >
             <FiPrinter size={14} />
-            <span>Print / PDF</span>
+            <span>Print</span>
           </button>
         </div>
       </div>
 
-      {/* A. Month Filter Bar */}
-      <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between print:border-none print:shadow-none print:p-0">
-        <div className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-            <FiCalendar size={16} />
+      {/* Month Filter Bar */}
+      <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 sm:flex-row sm:items-center sm:justify-between print:border-none print:p-0">
+        <div className="flex items-center gap-2.5 text-sm text-slate-700">
+          <FiCalendar size={16} className="text-slate-400" />
+          <span className="font-semibold text-slate-900">
+            {monthDisplayLabel}
           </span>
-          <div>
-            <span className="text-xs font-medium text-slate-400 block">
-              হিসাবের মাস নির্বাচন করুন
-            </span>
-            <strong className="font-heading text-base font-bold text-slate-800">
-              {monthDisplayLabel}
-            </strong>
-          </div>
         </div>
 
         <div className="flex items-center gap-2 print:hidden">
           <button
             type="button"
             onClick={handlePrevMonth}
-            className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
           >
             <FiChevronLeft size={14} />
-            <span>পূর্ববর্তী মাস</span>
+            <span>Prev</span>
           </button>
 
           <input
             type="month"
             value={selectedMonth}
             onChange={e => e.target.value && setSelectedMonth(e.target.value)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 outline-none transition focus:border-blue-500"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 outline-none focus:border-slate-500"
           />
 
           <button
             type="button"
             onClick={handleNextMonth}
-            className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50"
           >
-            <span>পরবর্তী মাস</span>
+            <span>Next</span>
             <FiChevronRight size={14} />
           </button>
         </div>
       </div>
 
-      {/* B. Summary Cards Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        {/* Card 1: Book Production */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-            <FiBookOpen size={18} />
-          </span>
-          <p className="mt-3 text-xs font-medium text-slate-500">
-            মোট বই প্রকাশনা খরচ
-          </p>
-          <p className="mt-0.5 font-heading text-xl font-bold text-slate-900">
+      {/* Summary Cards Grid (Clean white, no clutter) */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-medium text-slate-500">Book Production</p>
+          <p className="mt-1 font-heading text-xl font-bold text-slate-900">
             {formatCurrency(summary.bookCostTotal)}
           </p>
-          <span className="mt-2 block text-[11px] text-slate-400">
-            {summary.bookCount}টি ভাউচার এন্ট্রি
-          </span>
+          <p className="mt-1 text-xs text-slate-400">
+            {summary.bookCount} entries
+          </p>
         </div>
 
-        {/* Card 2: Author Commission */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-            <FiUsers size={18} />
-          </span>
-          <p className="mt-3 text-xs font-medium text-slate-500">
-            মোট লেখক কমিশন
-          </p>
-          <p className="mt-0.5 font-heading text-xl font-bold text-slate-900">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-medium text-slate-500">Author Royalty</p>
+          <p className="mt-1 font-heading text-xl font-bold text-slate-900">
             {formatCurrency(summary.authorCommissionTotal)}
           </p>
-          <span className="mt-2 block text-[11px] text-slate-400">
-            {summary.commissionCount}টি রয়্যালটি পরিশোধ
-          </span>
+          <p className="mt-1 text-xs text-slate-400">
+            {summary.commissionCount} entries
+          </p>
         </div>
 
-        {/* Card 3: Employee Expense */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
-            <FiBriefcase size={18} />
-          </span>
-          <p className="mt-3 text-xs font-medium text-slate-500">
-            মোট কর্মচারী খরচ
-          </p>
-          <p className="mt-0.5 font-heading text-xl font-bold text-slate-900">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-medium text-slate-500">Staff &amp; Office</p>
+          <p className="mt-1 font-heading text-xl font-bold text-slate-900">
             {formatCurrency(summary.employeeExpenseTotal)}
           </p>
-          <span className="mt-2 block text-[11px] text-slate-400">
-            {summary.employeeCount}টি বেতন ও খরচ
-          </span>
+          <p className="mt-1 text-xs text-slate-400">
+            {summary.employeeCount} entries
+          </p>
         </div>
 
-        {/* Card 4: Marketing Cost */}
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-xs">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-            <FiTrendingUp size={18} />
-          </span>
-          <p className="mt-3 text-xs font-medium text-slate-500">
-            মোট মার্কেটিং খরচ
-          </p>
-          <p className="mt-0.5 font-heading text-xl font-bold text-slate-900">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-medium text-slate-500">Marketing</p>
+          <p className="mt-1 font-heading text-xl font-bold text-slate-900">
             {formatCurrency(summary.marketingCostTotal)}
           </p>
-          <span className="mt-2 block text-[11px] text-slate-400">
-            {summary.marketingCount}টি প্রচার খাত
-          </span>
+          <p className="mt-1 text-xs text-slate-400">
+            {summary.marketingCount} entries
+          </p>
         </div>
 
-        {/* Card 5: Grand Total (High Emphasis) */}
-        <div className="rounded-2xl border border-slate-900 bg-slate-900 p-5 text-white shadow-xs">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-slate-900">
-            <FiDollarSign size={18} />
-          </span>
-          <p className="mt-3 text-xs font-medium text-slate-300">
-            সর্বমোট খরচ (Grand Total)
-          </p>
-          <p className="mt-0.5 font-heading text-xl font-bold text-primary">
+        <div className="rounded-xl border border-slate-300 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-700">Grand Total</p>
+          <p className="mt-1 font-heading text-xl font-bold text-slate-900">
             {formatCurrency(summary.grandTotal)}
           </p>
-          <div className="mt-2 flex items-center justify-between border-t border-slate-800 pt-2 text-[11px]">
-            <span className="text-slate-400">পূর্ববর্তী মাসের তুলনায়:</span>
-            <span
-              className={`inline-flex items-center gap-0.5 font-semibold ${
-                summary.percentageChange > 0
-                  ? 'text-amber-400'
-                  : summary.percentageChange < 0
-                    ? 'text-emerald-400'
-                    : 'text-slate-400'
-              }`}
-            >
-              {summary.percentageChange > 0 ? (
-                <FiTrendingUp size={12} />
-              ) : (
-                <FiTrendingDown size={12} />
-              )}
+          <p className="mt-1 inline-flex items-center gap-1 text-xs text-slate-500">
+            {summary.percentageChange > 0 ? (
+              <FiTrendingUp size={12} />
+            ) : (
+              <FiTrendingDown size={12} />
+            )}
+            <span>
               {summary.percentageChange > 0 ? '+' : ''}
-              {summary.percentageChange}%
+              {summary.percentageChange}% vs prev month
             </span>
-          </div>
+          </p>
         </div>
       </div>
 
-      {/* C. Tabs */}
+      {/* Tabs */}
       <div
         role="tablist"
-        aria-label="খরচের ক্যাটেগরি"
-        className="-mb-2 flex gap-1 overflow-x-auto border-b border-slate-200 print:hidden"
+        aria-label="Cost Categories"
+        className="flex gap-1 overflow-x-auto border-b border-slate-200 print:hidden"
       >
         {tabs.map(tab => {
           const Icon = tab.icon;
@@ -460,65 +411,50 @@ export default function TotalCost() {
               aria-selected={isActive}
               aria-controls={`cost-panel-${tab.id}`}
               onClick={() => setActiveTab(tab.id)}
-              className={`-mb-px inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-sm font-semibold transition ${
+              className={`-mb-px inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-4 py-2.5 text-xs font-semibold transition ${
                 isActive
-                  ? 'border-primary text-slate-900'
+                  ? 'border-slate-900 text-slate-900'
                   : 'border-transparent text-slate-500 hover:text-slate-800'
               }`}
             >
-              <Icon size={15} />
-              <span>{tab.label}</span>
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                  isActive
-                    ? 'bg-primary/30 text-slate-900'
-                    : 'bg-slate-100 text-slate-500'
-                }`}
-              >
-                {tab.count}
+              <Icon size={14} />
+              <span>
+                {tab.label} ({tab.count})
               </span>
             </button>
           );
         })}
       </div>
 
-      {/* ==================== Tab 1: Book Cost (per-book) ==================== */}
+      {/* ==================== Tab 1: Book Production ==================== */}
       <section
         role="tabpanel"
         id="cost-panel-book"
         aria-labelledby="cost-tab-book"
         className={panelClass('book')}
       >
-        <div className="rounded-2xl border border-slate-200/80 bg-white shadow-xs">
-          {/* Header */}
-          <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
-            <div>
-              <h2 className="font-heading text-base font-bold text-slate-900 sm:text-lg">
-                বই প্রকাশনা খরচ (Book Production Costs)
-              </h2>
-              <p className="mt-0.5 text-xs text-slate-500">
-                প্রতিটি বইয়ের প্রিন্টিং, পেপার, প্রচ্ছদ, এডিটিং ও বাইন্ডিং খরচ
-                বইভিত্তিক দেখুন
-              </p>
-            </div>
+        <div className="rounded-xl border border-slate-200 bg-white">
+          <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <h2 className="font-heading text-base font-bold text-slate-900">
+              Book Production Costs
+            </h2>
             <div className="flex flex-wrap items-center gap-2 print:hidden">
               <input
                 type="search"
                 value={bookSearch}
                 onChange={e => setBookSearch(e.target.value)}
-                placeholder="বইয়ের নাম খুঁজুন..."
-                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-blue-500 sm:w-52"
+                placeholder="Search book..."
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 outline-none focus:border-slate-500 sm:w-52"
               />
-              {addButton('book', 'বইয়ের খরচ যোগ করুন')}
+              {addButton('book', 'Add Cost')}
             </div>
           </div>
 
-          {/* Book list */}
           {filteredBookGroups.length === 0 ? (
             <p className="px-4 py-10 text-center text-sm text-slate-400">
               {bookGroups.length === 0
-                ? 'এই মাসে বই প্রকাশনার কোনো খরচ লিপিবদ্ধ নেই।'
-                : 'এই নামে কোনো বই পাওয়া যায়নি।'}
+                ? 'No book production costs recorded for this month.'
+                : 'No matching books found.'}
             </p>
           ) : (
             <ul className="divide-y divide-slate-100">
@@ -530,46 +466,30 @@ export default function TotalCost() {
 
                 return (
                   <li key={group.key}>
-                    {/* Book summary row */}
-                    <div className="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5">
+                    <div className="flex flex-wrap items-center gap-3 px-4 py-3">
                       <button
                         type="button"
                         onClick={() => toggleBook(group.key)}
                         aria-expanded={isOpen}
-                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                       >
                         <FiChevronDown
-                          size={16}
+                          size={15}
                           className={`shrink-0 text-slate-400 transition-transform print:hidden ${
                             isOpen ? '' : '-rotate-90'
                           }`}
                         />
                         <span className="min-w-0">
-                          <span className="block truncate text-sm font-semibold text-slate-800">
+                          <span className="block truncate text-sm font-semibold text-slate-900">
                             {group.bookName}
                           </span>
-                          <span className="mt-0.5 block text-[11px] text-slate-400">
-                            {group.entries.length}টি খরচ এন্ট্রি
+                          <span className="text-xs text-slate-400">
+                            {group.entries.length} entries
                           </span>
                         </span>
                       </button>
 
-                      {/* Cost type breakdown */}
-                      <div className="hidden flex-wrap gap-1.5 lg:flex">
-                        {Object.entries(group.byType).map(([type, amt]) => (
-                          <span
-                            key={type}
-                            className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-600"
-                          >
-                            {type}: {formatCurrency(amt)}
-                          </span>
-                        ))}
-                      </div>
-
                       <div className="text-right">
-                        <span className="block text-[11px] text-slate-400">
-                          মোট খরচ
-                        </span>
                         <strong className="text-sm font-bold text-slate-900">
                           {formatCurrency(group.total)}
                         </strong>
@@ -585,30 +505,38 @@ export default function TotalCost() {
                           })
                         }
                         className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 print:hidden"
-                        title="এই বইয়ে খরচ যোগ করুন"
+                        title="Add cost to this book"
                       >
                         <FiPlus size={13} />
-                        <span>খরচ</span>
+                        <span>Add</span>
                       </button>
                     </div>
 
-                    {/* Entries of this book */}
                     <div
-                      className={`overflow-x-auto bg-slate-50/60 px-4 pb-4 sm:px-5 ${
+                      className={`overflow-x-auto bg-slate-50/50 px-4 pb-3 ${
                         isOpen ? '' : 'hidden print:block'
                       }`}
                     >
-                      <table className="w-full min-w-[520px] text-left text-xs">
+                      <table className="w-full min-w-[540px] text-left text-xs">
                         <thead>
                           <tr className="border-b border-slate-200 text-slate-500">
-                            <th className="py-2 pr-3 font-medium">খরচের ধরন</th>
-                            <th className="py-2 pr-3 text-right font-medium">
-                              পরিমাণ
+                            <th className="whitespace-nowrap py-2 pr-3 font-medium">
+                              Category
                             </th>
-                            <th className="py-2 pr-3 font-medium">তারিখ</th>
-                            <th className="py-2 pr-3 font-medium">নোট</th>
-                            <th className="py-2 text-right font-medium print:hidden">
-                              অ্যাকশন
+                            <th className="whitespace-nowrap py-2 pr-3 text-right font-medium">
+                              Paid
+                            </th>
+                            <th className="whitespace-nowrap py-2 pr-3 text-right font-medium">
+                              Due
+                            </th>
+                            <th className="whitespace-nowrap py-2 pr-3 font-medium">
+                              Date
+                            </th>
+                            <th className="whitespace-nowrap py-2 pr-3 font-medium">
+                              Note
+                            </th>
+                            <th className="whitespace-nowrap py-2 text-right font-medium print:hidden">
+                              Actions
                             </th>
                           </tr>
                         </thead>
@@ -621,24 +549,30 @@ export default function TotalCost() {
                               <td className="py-2 pr-3 font-medium text-slate-700">
                                 {item.costType}
                               </td>
-                              <td className="py-2 pr-3 text-right font-bold text-slate-900">
+                              <td className="whitespace-nowrap py-2 pr-3 text-right font-semibold text-slate-900">
                                 {formatCurrency(item.amount)}
                               </td>
-                              <td className="py-2 pr-3 text-slate-600">
+                              <td className="whitespace-nowrap py-2 pr-3 text-right text-slate-600">
+                                {Number(item.dueAmount) > 0
+                                  ? formatCurrency(item.dueAmount)
+                                  : '—'}
+                              </td>
+                              <td className="whitespace-nowrap py-2 pr-3 text-slate-600">
                                 {item.date}
                               </td>
                               <td className="py-2 pr-3 text-slate-500">
                                 {item.note || '—'}
                               </td>
                               <td className="py-2 text-right print:hidden">
-                                <div className="flex items-center justify-end gap-1.5">
+                                <div className="flex items-center justify-end gap-1">
                                   <button
                                     type="button"
                                     onClick={() =>
                                       setFormModal({ type: 'book', item })
                                     }
-                                    className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                                    title="সম্পাদনা করুন"
+                                    className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                                    title="Edit"
+                                    aria-label="Edit entry"
                                   >
                                     <FiEdit2 size={13} />
                                   </button>
@@ -647,8 +581,9 @@ export default function TotalCost() {
                                     onClick={() =>
                                       setDeleteConfirm({ type: 'book', item })
                                     }
-                                    className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                                    title="মুছে ফেলুন"
+                                    className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
+                                    title="Delete"
+                                    aria-label="Delete entry"
                                   >
                                     <FiTrash2 size={13} />
                                   </button>
@@ -665,12 +600,9 @@ export default function TotalCost() {
             </ul>
           )}
 
-          {/* Footer total */}
           {bookGroups.length > 0 && (
-            <div className="flex items-center justify-between rounded-b-2xl border-t border-slate-100 bg-slate-50/70 px-4 py-3 text-xs text-slate-700 sm:px-5">
-              <span>
-                এই মাসে {bookGroups.length}টি বইয়ের মোট প্রকাশনা খরচ:
-              </span>
+            <div className="flex items-center justify-between border-t border-slate-100 px-4 py-3 text-xs text-slate-600">
+              <span>{bookGroups.length} book(s) total</span>
               <strong className="text-sm font-bold text-slate-900">
                 {formatCurrency(summary.bookCostTotal)}
               </strong>
@@ -679,7 +611,7 @@ export default function TotalCost() {
         </div>
       </section>
 
-      {/* ==================== Tab 2: Author Commission ==================== */}
+      {/* ==================== Tab 2: Author Royalty ==================== */}
       <section
         role="tabpanel"
         id="cost-panel-author"
@@ -687,17 +619,17 @@ export default function TotalCost() {
         className={panelClass('author')}
       >
         <DataTable
-          title="লেখক কমিশন (Author Commission)"
-          subtitle="বই বিক্রয় বাবদ লেখকদের পরিশোধিত রয়্যালটি কমিশন হিসেব"
+          title="Author Royalty"
           data={authorCommissions}
+          selectable={false}
           searchKeys={['authorName', 'bookName', 'method', 'note']}
-          searchPlaceholder="লেখক, বই বা মেথড খুঁজুন..."
+          searchPlaceholder="Search author, book, or method..."
           pageSize={6}
-          headerActions={addButton('author', 'লেখক কমিশন যোগ করুন')}
+          headerActions={addButton('author', 'Add Royalty')}
           columns={[
             {
               key: 'authorName',
-              header: 'লেখক (Author)',
+              header: 'Author',
               sortable: true,
               render: item => (
                 <span className="font-semibold text-slate-800">
@@ -707,71 +639,66 @@ export default function TotalCost() {
             },
             {
               key: 'bookName',
-              header: 'বই (Book)',
+              header: 'Book',
               sortable: true,
               render: item => (
-                <span className="text-slate-700">{item.bookName || '—'}</span>
+                <span className="text-slate-600">{item.bookName || '—'}</span>
               ),
             },
             {
               key: 'amount',
-              header: 'কমিশন পরিমাণ (Amount)',
+              header: 'Amount',
               align: 'right',
               sortable: true,
               sortValue: item => Number(item.amount || 0),
               render: item => (
-                <span className="font-bold text-emerald-600 text-sm">
+                <span className="whitespace-nowrap font-semibold text-slate-900">
                   {formatCurrency(item.amount)}
                 </span>
               ),
             },
             {
               key: 'date',
-              header: 'পরিশোধের তারিখ (Date)',
+              header: 'Date',
               sortable: true,
               render: item => (
-                <span className="text-slate-600">{item.date}</span>
+                <span className="whitespace-nowrap text-slate-600">
+                  {item.date}
+                </span>
               ),
             },
             {
               key: 'method',
-              header: 'পেমেন্ট মাধ্যম (Method)',
+              header: 'Method',
               align: 'center',
               render: item => (
-                <span className="rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
-                  {item.method}
-                </span>
+                <span className="text-xs text-slate-600">{item.method}</span>
               ),
             },
             actionsColumn('author'),
           ]}
-          emptyMessage="এই মাসে লেখকদের কোনো কমিশন পরিশোধের রেকর্ড নেই।"
+          emptyMessage="No author royalty entries for this month."
         />
 
-        {/* Per-author total summary bar */}
         {perAuthorTotals.length > 0 && (
-          <div className="rounded-xl border border-slate-200/70 bg-slate-50/70 p-3.5">
-            <span className="text-xs font-semibold text-slate-700 block mb-2">
-              ✍️ লেখকভিত্তিক মোট কমিশন (Per-author total for this month):
-            </span>
-            <div className="flex flex-wrap gap-2">
-              {perAuthorTotals.map(([authorName, total]) => (
-                <span
-                  key={authorName}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 shadow-2xs"
-                >
-                  <span className="font-medium">{authorName}:</span>
-                  <strong className="text-emerald-700 font-bold">
-                    {formatCurrency(total)}
-                  </strong>
-                </span>
-              ))}
-            </div>
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600">
+            <span className="font-semibold text-slate-700">By Author:</span>
+            {perAuthorTotals.map(([authorName, total]) => (
+              <span
+                key={authorName}
+                className="rounded-md border border-slate-200 px-2.5 py-1 text-slate-700"
+              >
+                {authorName}:{' '}
+                <strong className="text-slate-900">
+                  {formatCurrency(total)}
+                </strong>
+              </span>
+            ))}
           </div>
         )}
       </section>
 
-      {/* ==================== Tab 3: Employee Expense ==================== */}
+      {/* ==================== Tab 3: Staff & Office ==================== */}
       <section
         role="tabpanel"
         id="cost-panel-employee"
@@ -779,17 +706,17 @@ export default function TotalCost() {
         className={panelClass('employee')}
       >
         <DataTable
-          title="কর্মচারী ও অফিস ব্যয় (Employee Expense)"
-          subtitle="কর্মচারীদের মাসিক বেতন, বোনাস, ইনসেন্টিভ ও যাতায়াত খরচ"
+          title="Staff & Office Expense"
           data={employeeExpenses}
+          selectable={false}
           searchKeys={['employeeName', 'expenseType', 'note']}
-          searchPlaceholder="কর্মচারী বা খরচের ধরন খুঁজুন..."
+          searchPlaceholder="Search employee or expense type..."
           pageSize={6}
-          headerActions={addButton('employee', 'কর্মচারী খরচ যোগ করুন')}
+          headerActions={addButton('employee', 'Add Expense')}
           columns={[
             {
               key: 'employeeName',
-              header: 'কর্মচারী (Employee)',
+              header: 'Employee',
               sortable: true,
               render: item => (
                 <span className="font-semibold text-slate-800">
@@ -799,58 +726,52 @@ export default function TotalCost() {
             },
             {
               key: 'expenseType',
-              header: 'খরচের ধরন (Expense Type)',
-              align: 'center',
+              header: 'Type',
               sortable: true,
               render: item => (
-                <span className="rounded-full bg-purple-50 px-2.5 py-0.5 text-xs font-medium text-purple-700">
+                <span className="text-xs text-slate-600">
                   {item.expenseType}
                 </span>
               ),
             },
             {
               key: 'amount',
-              header: 'পরিমাণ (Amount)',
+              header: 'Amount',
               align: 'right',
               sortable: true,
               sortValue: item => Number(item.amount || 0),
               render: item => (
-                <span className="font-bold text-slate-900 text-sm">
+                <span className="whitespace-nowrap font-semibold text-slate-900">
                   {formatCurrency(item.amount)}
                 </span>
               ),
             },
             {
               key: 'date',
-              header: 'তারিখ (Date)',
+              header: 'Date',
               sortable: true,
               render: item => (
-                <span className="text-slate-600">{item.date}</span>
+                <span className="whitespace-nowrap text-slate-600">
+                  {item.date}
+                </span>
               ),
             },
             {
               key: 'note',
-              header: 'নোট (Note)',
+              header: 'Note',
               render: item => (
-                <span className="text-xs text-slate-500 line-clamp-1">
+                <span className="line-clamp-1 text-xs text-slate-500">
                   {item.note || '—'}
                 </span>
               ),
             },
             actionsColumn('employee'),
           ]}
-          emptyMessage="এই মাসে কর্মচারীদের কোনো খরচের হিসাব লিপিবদ্ধ নেই।"
+          emptyMessage="No staff or office expenses for this month."
         />
-
-        <div className="rounded-xl border border-slate-200/70 bg-slate-50/70 px-4 py-2.5 text-xs text-slate-700 flex items-center justify-between">
-          <span>চলতি মাসে মোট কর্মচারী ও অফিস ব্যয়:</span>
-          <strong className="text-slate-900 font-bold text-sm">
-            {formatCurrency(summary.employeeExpenseTotal)}
-          </strong>
-        </div>
       </section>
 
-      {/* ==================== Tab 4: Marketing Cost ==================== */}
+      {/* ==================== Tab 4: Marketing ==================== */}
       <section
         role="tabpanel"
         id="cost-panel-marketing"
@@ -858,74 +779,69 @@ export default function TotalCost() {
         className={panelClass('marketing')}
       >
         <DataTable
-          title="মার্কেটিং ও প্রচার ব্যয় (Marketing Cost)"
-          subtitle="ডিজিটাল বিজ্ঞাপন, ইনফ্লুয়েন্সার রিভিউ ও অফলাইন পাবলিসিটি খরচ"
+          title="Marketing Expense"
           data={marketingCosts}
+          selectable={false}
           searchKeys={['channel', 'bookName', 'note']}
-          searchPlaceholder="ক্যাম্পেইন চ্যানেল বা বই খুঁজুন..."
+          searchPlaceholder="Search channel or book..."
           pageSize={6}
-          headerActions={addButton('marketing', 'মার্কেটিং খরচ যোগ করুন')}
+          headerActions={addButton('marketing', 'Add Marketing')}
           columns={[
             {
               key: 'channel',
-              header: 'ক্যাম্পেইন চ্যানেল (Channel)',
+              header: 'Channel',
               sortable: true,
               render: item => (
-                <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                <span className="font-medium text-slate-800">
                   {item.channel}
                 </span>
               ),
             },
             {
               key: 'bookName',
-              header: 'সংশ্লিষ্ট বই (Related Book)',
+              header: 'Book',
               sortable: true,
               render: item => (
-                <span className="text-slate-700">
-                  {item.bookName || 'সাধারণ ব্র্যান্ডিং'}
+                <span className="text-slate-600">
+                  {item.bookName || 'General Branding'}
                 </span>
               ),
             },
             {
               key: 'amount',
-              header: 'পরিমাণ (Amount)',
+              header: 'Amount',
               align: 'right',
               sortable: true,
               sortValue: item => Number(item.amount || 0),
               render: item => (
-                <span className="font-bold text-slate-900 text-sm">
+                <span className="whitespace-nowrap font-semibold text-slate-900">
                   {formatCurrency(item.amount)}
                 </span>
               ),
             },
             {
               key: 'date',
-              header: 'তারিখ (Date)',
+              header: 'Date',
               sortable: true,
               render: item => (
-                <span className="text-slate-600">{item.date}</span>
+                <span className="whitespace-nowrap text-slate-600">
+                  {item.date}
+                </span>
               ),
             },
             {
               key: 'note',
-              header: 'নোট (Note)',
+              header: 'Note',
               render: item => (
-                <span className="text-xs text-slate-500 line-clamp-1">
+                <span className="line-clamp-1 text-xs text-slate-500">
                   {item.note || '—'}
                 </span>
               ),
             },
             actionsColumn('marketing'),
           ]}
-          emptyMessage="এই মাসে কোনো মার্কেটিং ব্যয়ের রেকর্ড নেই।"
+          emptyMessage="No marketing expenses for this month."
         />
-
-        <div className="rounded-xl border border-slate-200/70 bg-slate-50/70 px-4 py-2.5 text-xs text-slate-700 flex items-center justify-between">
-          <span>চলতি মাসে মোট প্রচার ও মার্কেটিং ব্যয়:</span>
-          <strong className="text-slate-900 font-bold text-sm">
-            {formatCurrency(summary.marketingCostTotal)}
-          </strong>
-        </div>
       </section>
 
       {/* Modal: Add / Edit for All 4 Tabs */}
@@ -938,6 +854,7 @@ export default function TotalCost() {
           books={allBooks}
           authors={allAuthors}
           employees={allEmployees}
+          currentUser={currentUser}
           onClose={() => setFormModal(null)}
           onSaved={() => {
             setFormModal(null);
@@ -949,9 +866,9 @@ export default function TotalCost() {
       {/* Confirmation Modal for Deletion */}
       <ConfirmModal
         isOpen={Boolean(deleteConfirm)}
-        title="খরচের রেকর্ড মুছে ফেলতে চান?"
-        message={`আপনি কি নিশ্চিতভাবে "${deleteConfirm?.item?.bookName || deleteConfirm?.item?.authorName || deleteConfirm?.item?.employeeName || deleteConfirm?.item?.channel}" এর রেকর্ডটি মুছে ফেলতে চান? এটি মুছে ফেললে সর্বমোট হিসাব থেকে বাদ যাবে।`}
-        confirmLabel="হ্যাঁ, মুছে ফেলুন"
+        title="Delete Cost Record?"
+        message={`Are you sure you want to delete "${deleteConfirm?.item?.bookName || deleteConfirm?.item?.authorName || deleteConfirm?.item?.employeeName || deleteConfirm?.item?.channel}"? This removes it from totals.`}
+        confirmLabel="Delete"
         onConfirm={executeDelete}
         onCancel={() => setDeleteConfirm(null)}
       />
@@ -968,10 +885,12 @@ function CostFormModal({
   books,
   authors,
   employees,
+  currentUser,
   onClose,
   onSaved,
 }) {
   const isEditing = Boolean(initialItem);
+  const expenseProfiles = useMemo(() => getExpenseProfiles(), []);
 
   // Form Fields State
   const defaultDate = initialItem?.date || `${selectedMonth}-15`;
@@ -1006,20 +925,29 @@ function CostFormModal({
   const [paymentMethod, setPaymentMethod] = useState(
     initialItem?.method || PAYMENT_METHODS[0],
   );
+  const [expenseProfileId, setExpenseProfileId] = useState(() => {
+    if (initialItem?.expenseProfileId) return initialItem.expenseProfileId;
+    if (type === 'book') {
+      return resolveProfileIdFromCategory(initialItem?.costType || COST_TYPES[0]);
+    }
+    if (type === 'employee') {
+      return resolveProfileIdFromCategory(initialItem?.expenseType || EXPENSE_TYPES[0]);
+    }
+    if (type === 'author') return 'prof-manuscript';
+    return 'prof-other';
+  });
+  const [payeeName, setPayeeName] = useState(initialItem?.payeeName || '');
   const [amount, setAmount] = useState(initialItem?.amount || '');
+  const [dueAmount, setDueAmount] = useState(initialItem?.dueAmount || '');
   const [date, setDate] = useState(defaultDate);
   const [note, setNote] = useState(initialItem?.note || '');
 
   // Modal Titles
   const modalTitles = {
-    book: isEditing
-      ? 'বইয়ের প্রকাশনা খরচ সম্পাদনা'
-      : 'নতুন বইয়ের খরচ যোগ করুন',
-    author: isEditing ? 'লেখক কমিশন তথ্য সম্পাদনা' : 'নতুন লেখক কমিশন এন্ট্রি',
-    employee: isEditing ? 'কর্মচারী খরচ সম্পাদনা' : 'নতুন কর্মচারী খরচ এন্ট্রি',
-    marketing: isEditing
-      ? 'মার্কেটিং খরচ সম্পাদনা'
-      : 'নতুন মার্কেটিং খরচ এন্ট্রি',
+    book: isEditing ? 'Edit Book Production Cost' : 'Add Book Production Cost',
+    author: isEditing ? 'Edit Author Royalty' : 'Add Author Royalty',
+    employee: isEditing ? 'Edit Staff Expense' : 'Add Staff Expense',
+    marketing: isEditing ? 'Edit Marketing Expense' : 'Add Marketing Expense',
   };
 
   const handleSubmit = e => {
@@ -1028,26 +956,50 @@ function CostFormModal({
     // Validations
     const numAmount = Number(amount);
     if (!amount || isNaN(numAmount) || numAmount <= 0) {
-      toast.error('সঠিক টাকার পরিমাণ দিন (অবশ্যই ০-এর বেশি হতে হবে)।');
+      toast.error('Enter a valid amount greater than 0.');
       return;
     }
     if (!date) {
-      toast.error('অনুগ্রহ করে সঠিক তারিখ নির্বাচন করুন।');
+      toast.error('Please select a valid date.');
       return;
     }
+
+    const numDue = Math.max(0, Number(dueAmount) || 0);
 
     if (type === 'book') {
       const selectedBook = books.find(b => String(b.id) === String(bookId));
       const payload = {
         bookId,
-        bookName: selectedBook?.title || 'বই',
+        bookName: selectedBook?.title || 'Book',
         costType,
         amount: numAmount,
+        dueAmount: numDue,
+        payeeName: payeeName.trim(),
+        expenseProfileId,
+        method: paymentMethod,
         date,
         note,
       };
-      if (isEditing) updateBookCost(initialItem.id, payload);
-      else addBookCost(payload);
+      const saved = isEditing
+        ? updateBookCost(initialItem.id, payload)
+        : addBookCost(payload);
+      if (saved?.id) {
+        syncCostToExpenseProfile({
+          totalCostRefId: saved.id,
+          profileId: expenseProfileId,
+          category: costType,
+          vendorName: payeeName.trim() || `${costType} (${selectedBook?.title || 'Book'})`,
+          bookTitle: selectedBook?.title || '',
+          description: note || `${costType} expense from Total Cost`,
+          paidAmount: numAmount,
+          dueAmount: numDue,
+          method: paymentMethod,
+          date,
+          recordedById: currentUser?.id || 'admin',
+          recordedByName: currentUser?.name || 'Admin',
+          recordedByRole: currentUser?.role || 'admin',
+        });
+      }
     } else if (type === 'author') {
       const selectedAuthor = authors.find(
         a => String(a.id) === String(authorId),
@@ -1055,21 +1007,41 @@ function CostFormModal({
       const selectedBook = books.find(b => String(b.id) === String(bookId));
       const payload = {
         authorId,
-        authorName: selectedAuthor?.name || 'লেখক',
+        authorName: selectedAuthor?.name || 'Author',
         bookId: bookId || '',
         bookName: selectedBook?.title || '',
         amount: numAmount,
+        dueAmount: numDue,
+        expenseProfileId,
         date,
         method: paymentMethod,
         note,
       };
-      if (isEditing) updateAuthorCommission(initialItem.id, payload);
-      else addAuthorCommission(payload);
+      const saved = isEditing
+        ? updateAuthorCommission(initialItem.id, payload)
+        : addAuthorCommission(payload);
+      if (saved?.id) {
+        syncCostToExpenseProfile({
+          totalCostRefId: saved.id,
+          profileId: expenseProfileId,
+          category: 'Manuscript',
+          vendorName: selectedAuthor?.name || 'Author Commission',
+          bookTitle: selectedBook?.title || '',
+          description: note || 'Author commission / manuscript payout',
+          paidAmount: numAmount,
+          dueAmount: numDue,
+          method: paymentMethod,
+          date,
+          recordedById: currentUser?.id || 'admin',
+          recordedByName: currentUser?.name || 'Admin',
+          recordedByRole: currentUser?.role || 'admin',
+        });
+      }
     } else if (type === 'employee') {
       const selectedEmp = employees.find(emp => emp.id === employeeId);
       const finalName =
         employeeId === 'custom'
-          ? employeeName.trim() || 'কর্মচারী'
+          ? employeeName.trim() || 'Employee'
           : selectedEmp?.name || employeeName;
 
       const payload = {
@@ -1077,53 +1049,90 @@ function CostFormModal({
         employeeName: finalName,
         expenseType,
         amount: numAmount,
+        dueAmount: numDue,
+        expenseProfileId,
         date,
         note,
       };
-      if (isEditing) updateEmployeeExpense(initialItem.id, payload);
-      else addEmployeeExpense(payload);
+      const saved = isEditing
+        ? updateEmployeeExpense(initialItem.id, payload)
+        : addEmployeeExpense(payload);
+      if (saved?.id) {
+        syncCostToExpenseProfile({
+          totalCostRefId: saved.id,
+          profileId: expenseProfileId,
+          category: expenseType,
+          vendorName: finalName,
+          bookTitle: '',
+          description: note || `${expenseType} expense from Total Cost`,
+          paidAmount: numAmount,
+          dueAmount: numDue,
+          method: paymentMethod,
+          date,
+          recordedById: currentUser?.id || 'admin',
+          recordedByName: currentUser?.name || 'Admin',
+          recordedByRole: currentUser?.role || 'admin',
+        });
+      }
     } else if (type === 'marketing') {
       const selectedBook = books.find(b => String(b.id) === String(bookId));
       const payload = {
         channel,
         bookId: bookId || '',
-        bookName: selectedBook?.title || 'সার্বিক প্রচার',
+        bookName: selectedBook?.title || 'General Branding',
         amount: numAmount,
+        dueAmount: numDue,
+        expenseProfileId,
         date,
         note,
       };
-      if (isEditing) updateMarketingCost(initialItem.id, payload);
-      else addMarketingCost(payload);
+      const saved = isEditing
+        ? updateMarketingCost(initialItem.id, payload)
+        : addMarketingCost(payload);
+      if (saved?.id) {
+        syncCostToExpenseProfile({
+          totalCostRefId: saved.id,
+          profileId: expenseProfileId,
+          category: 'Other',
+          vendorName: `${channel} Marketing`,
+          bookTitle: selectedBook?.title || '',
+          description: note || `${channel} campaign cost`,
+          paidAmount: numAmount,
+          dueAmount: numDue,
+          method: paymentMethod,
+          date,
+          recordedById: currentUser?.id || 'admin',
+          recordedByName: currentUser?.name || 'Admin',
+          recordedByRole: currentUser?.role || 'admin',
+        });
+      }
     }
 
-    toast.success(
-      isEditing
-        ? 'তথ্য সফলভাবে আপডেট করা হয়েছে।'
-        : 'নতুন খরচের রেকর্ড সফলভাবে যুক্ত হয়েছে।',
-    );
+    toast.success(isEditing ? 'Cost record updated.' : 'Cost record added.');
     onSaved();
   };
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-dark/70 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl animate-in fade-in duration-150">
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/45 px-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
         <div className="flex items-start justify-between border-b border-slate-100 pb-3.5">
           <div>
-            <h3 className="font-heading text-lg font-bold text-slate-900">
+            <h3 className="font-heading text-base font-bold text-slate-900">
               {modalTitles[type]}
             </h3>
-            <p className="mt-0.5 text-xs text-slate-400">
-              {isEditing
-                ? 'বিদ্যমান তথ্য পরিবর্তন করুন'
-                : 'সঠিক তথ্য দিয়ে ফর্মটি পূরণ করুন'}
-            </p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1 text-slate-400 hover:text-slate-700"
+            className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-900"
           >
-            <FiX size={18} />
+            Close
           </button>
         </div>
 
@@ -1133,15 +1142,12 @@ function CostFormModal({
             <>
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  বই নির্বাচন করুন *
+                  Book *
                 </label>
-                <p className="mb-1.5 text-[11px] text-slate-400">
-                  একই বই নির্বাচন করলে খরচটি ওই বইয়ের তালিকাতেই যোগ হবে।
-                </p>
                 <select
                   value={bookId}
                   onChange={e => setBookId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
                   required
                 >
                   {books.map(b => (
@@ -1154,12 +1160,18 @@ function CostFormModal({
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  খরচের ধরন (Cost Type) *
+                  Cost Type *
                 </label>
                 <select
                   value={costType}
-                  onChange={e => setCostType(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  onChange={e => {
+                    const nextType = e.target.value;
+                    setCostType(nextType);
+                    if (!isEditing) {
+                      setExpenseProfileId(resolveProfileIdFromCategory(nextType));
+                    }
+                  }}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
                 >
                   {COST_TYPES.map(t => (
                     <option key={t} value={t}>
@@ -1167,6 +1179,19 @@ function CostFormModal({
                     </option>
                   ))}
                 </select>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Vendor / Payee (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={payeeName}
+                  onChange={e => setPayeeName(e.target.value)}
+                  placeholder="Bindery, Press, or Vendor name"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
+                />
               </div>
             </>
           )}
@@ -1176,12 +1201,12 @@ function CostFormModal({
             <>
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  লেখক নির্বাচন করুন *
+                  Author *
                 </label>
                 <select
                   value={authorId}
                   onChange={e => setAuthorId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
                   required
                 >
                   {authors.map(a => (
@@ -1194,14 +1219,14 @@ function CostFormModal({
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  সংশ্লিষ্ট বই (ঐচ্ছিক)
+                  Book (Optional)
                 </label>
                 <select
                   value={bookId}
                   onChange={e => setBookId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
                 >
-                  <option value="">— কোনো নির্দিষ্ট বই নয় —</option>
+                  <option value="">All / General</option>
                   {books.map(b => (
                     <option key={b.id} value={b.id}>
                       {b.title}
@@ -1212,12 +1237,12 @@ function CostFormModal({
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  পেমেন্ট মাধ্যম (Payment Method) *
+                  Payment Method *
                 </label>
                 <select
                   value={paymentMethod}
                   onChange={e => setPaymentMethod(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
                 >
                   {PAYMENT_METHODS.map(m => (
                     <option key={m} value={m}>
@@ -1234,7 +1259,7 @@ function CostFormModal({
             <>
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  কর্মচারী নির্বাচন বা নাম *
+                  Employee *
                 </label>
                 <select
                   value={employeeId}
@@ -1243,14 +1268,14 @@ function CostFormModal({
                     const emp = employees.find(em => em.id === e.target.value);
                     if (emp) setEmployeeName(emp.name);
                   }}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
                 >
                   {employees.map(emp => (
                     <option key={emp.id} value={emp.id}>
                       {emp.name} ({emp.email})
                     </option>
                   ))}
-                  <option value="custom">+ অন্য কর্মচারী / কাস্টম নাম</option>
+                  <option value="custom">+ Custom Employee Name</option>
                 </select>
 
                 {employeeId === 'custom' && (
@@ -1258,8 +1283,8 @@ function CostFormModal({
                     type="text"
                     value={employeeName}
                     onChange={e => setEmployeeName(e.target.value)}
-                    placeholder="কর্মচারীর নাম ও পদবি লিখুন..."
-                    className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
+                    placeholder="Employee name"
+                    className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
                     required
                   />
                 )}
@@ -1267,12 +1292,18 @@ function CostFormModal({
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  খরচের ধরন (Expense Type) *
+                  Expense Type *
                 </label>
                 <select
                   value={expenseType}
-                  onChange={e => setExpenseType(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  onChange={e => {
+                    const nextType = e.target.value;
+                    setExpenseType(nextType);
+                    if (!isEditing) {
+                      setExpenseProfileId(resolveProfileIdFromCategory(nextType));
+                    }
+                  }}
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
                 >
                   {EXPENSE_TYPES.map(et => (
                     <option key={et} value={et}>
@@ -1289,12 +1320,12 @@ function CostFormModal({
             <>
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  মার্কেটিং চ্যানেল (Channel) *
+                  Channel *
                 </label>
                 <select
                   value={channel}
                   onChange={e => setChannel(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
                 >
                   {MARKETING_CHANNELS.map(ch => (
                     <option key={ch} value={ch}>
@@ -1306,14 +1337,14 @@ function CostFormModal({
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  সংশ্লিষ্ট বই (Related Book - ঐচ্ছিক)
+                  Related Book (Optional)
                 </label>
                 <select
                   value={bookId}
                   onChange={e => setBookId(e.target.value)}
-                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
                 >
-                  <option value="">— সার্বিক পাবলিকেশন প্রচার —</option>
+                  <option value="">General Branding</option>
                   {books.map(b => (
                     <option key={b.id} value={b.id}>
                       {b.title}
@@ -1324,32 +1355,66 @@ function CostFormModal({
             </>
           )}
 
-          {/* Common Amount Field */}
+          {/* Sync Target Expense Profile */}
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
-              টাকার পরিমাণ (Amount in ৳) *
+              Expense Profile (Auto-Sync)
             </label>
-            <input
-              type="number"
-              min="1"
-              value={amount}
-              onChange={e => setAmount(e.target.value)}
-              placeholder="যেমন: ১৫০০০"
-              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
-              required
-            />
+            <select
+              value={expenseProfileId}
+              onChange={e => setExpenseProfileId(e.target.value)}
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-semibold text-slate-800 outline-none focus:border-slate-500"
+            >
+              {expenseProfiles.map(prof => (
+                <option key={prof.id} value={prof.id}>
+                  {prof.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Amount Paid & Optional Due Fields */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Paid Amount (৳) *
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="e.g. 15000"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
+                required
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold text-slate-700 mb-1">
+                Due Amount (৳ - Optional)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={dueAmount}
+                onChange={e => setDueAmount(e.target.value)}
+                placeholder="0"
+                className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
+              />
+            </div>
           </div>
 
           {/* Common Date Field */}
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
-              তারিখ (Date) *
+              Date *
             </label>
             <input
               type="date"
               value={date}
               onChange={e => setDate(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
+              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
               required
             />
           </div>
@@ -1357,31 +1422,31 @@ function CostFormModal({
           {/* Common Note Field */}
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
-              নোট / বিবরণ (Note)
+              Note
             </label>
             <textarea
               value={note}
               onChange={e => setNote(e.target.value)}
               rows="2"
-              placeholder="খরচের অতিরিক্ত তথ্য বা ভাউচার নম্বর..."
-              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-blue-500"
+              placeholder="Optional note or voucher reference..."
+              className="w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs text-slate-800 outline-none focus:border-slate-500"
             />
           </div>
 
           {/* Buttons */}
-          <div className="mt-5 flex justify-end gap-2.5 pt-2 border-t border-slate-100">
+          <div className="mt-5 flex justify-end gap-2 pt-3 border-t border-slate-100">
             <button
               type="button"
               onClick={onClose}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
+              className="rounded-lg border border-slate-200 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50"
             >
-              বাতিল
+              Cancel
             </button>
             <button
               type="submit"
-              className="rounded-xl bg-primary px-5 py-2 text-xs font-bold text-dark hover:bg-primary-hover shadow-xs"
+              className="rounded-lg bg-primary px-5 py-2 text-xs font-bold text-dark hover:bg-primary-hover"
             >
-              {isEditing ? 'আপডেট করুন' : 'সংরক্ষণ করুন'}
+              {isEditing ? 'Update' : 'Save'}
             </button>
           </div>
         </form>

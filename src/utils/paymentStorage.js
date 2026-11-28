@@ -102,6 +102,26 @@ export function addPaymentRequest({ userId, authorName, authorEmail, amount, met
   return request;
 }
 
+export function addDirectAuthorPayment({ userId, authorName, authorEmail, amount, method, account, note }) {
+  const all = readAll();
+  const nowIso = new Date().toISOString();
+  const payment = {
+    id: `PR-${1001 + all.length}`,
+    userId,
+    authorName: authorName || 'Author',
+    authorEmail: authorEmail || '',
+    amount: Number(amount),
+    method: method || 'Cash',
+    account: account || 'Direct Payout',
+    adminNote: note || 'Direct royalty payment',
+    requestedAt: nowIso,
+    reviewedAt: nowIso,
+    status: 'Paid',
+  };
+  writeAll([payment, ...all]);
+  return payment;
+}
+
 export function updatePaymentRequestStatus(id, status, adminNote = '') {
   const all = readAll();
   const updated = all.map(request =>

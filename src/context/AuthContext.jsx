@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import usersSeed from '../data/users'
 import { hasPermission, PERMISSIONS } from '../utils/roles'
+import { recordEmployeeWebsiteVisit } from '../utils/employeeStorage'
 import AuthContext from './AuthContextValue'
 
 const USERS_KEY = 'hosonta_auth_users'
@@ -61,6 +62,9 @@ export function AuthProvider({ children }) {
     const sessionUser = createSessionUser(user)
     localStorage.setItem(SESSION_KEY, JSON.stringify(sessionUser))
     setCurrentUser(sessionUser)
+    if (sessionUser.role === 'employee') {
+      recordEmployeeWebsiteVisit(sessionUser.id, 'Website Login')
+    }
     return { success: true, user: sessionUser }
   }
 
@@ -114,12 +118,49 @@ export function AuthProvider({ children }) {
 
   const updateUserRole = (userId, role) => {
     if (!currentUser || !hasPermission(currentUser.role, PERMISSIONS.MANAGE_ROLES)) {
-      return { success: false, message: 'এই কাজের অনুমতি নেই।' }
+      return { success: false, message: 'Permission denied.' }
     }
-    const nextUsers = users.map((user) => user.id === userId ? { ...user, role } : user)
+    const nextUsers = users.map((user) => user.id === userId ? { ...user, role, status: user.status || 'active' } : user)
     setUsers(nextUsers)
     localStorage.setItem(USERS_KEY, JSON.stringify(nextUsers))
     return { success: true }
+  }
+
+  const updateUserStatus = (userId, status) => {
+    if (!currentUser || !hasPermission(currentUser.role, PERMISSIONS.MANAGE_USERS)) {
+      return { success: false, message: 'Permission denied.' }
+    }
+    const nextUsers = users.map((user) => (user.id === userId ? { ...user, status } : user))
+    setUsers(nextUsers)
+    localStorage.setItem(USERS_KEY, JSON.stringify(nextUsers))
+    return { success: true }
+  }
+
+  const createEmployeeUser = ({ name, email, password, phone = '' }) => {
+    if (!currentUser || !hasPermission(currentUser.role, PERMISSIONS.MANAGE_USERS)) {
+      return { success: false, message: 'Permission denied.' }
+    }
+    const normalizedEmail = String(email || '').trim().toLowerCase()
+    if (!name?.trim() || !normalizedEmail || !password) {
+      return { success: false, message: 'Name, email, and password are required.' }
+    }
+    if (users.some((u) => u.email.toLowerCase() === normalizedEmail)) {
+      return { success: false, message: 'An account with this email already exists.' }
+    }
+    const newEmployee = {
+      id: `user-employee-${Date.now()}`,
+      name: name.trim(),
+      email: normalizedEmail,
+      password,
+      phone: phone.trim(),
+      role: 'employee',
+      status: 'active',
+      avatar: `https://i.pravatar.cc/100?u=${encodeURIComponent(normalizedEmail)}`,
+    }
+    const nextUsers = [...users, newEmployee]
+    setUsers(nextUsers)
+    localStorage.setItem(USERS_KEY, JSON.stringify(nextUsers))
+    return { success: true, user: createSessionUser(newEmployee) }
   }
 
   const approveAuthorApplication = (userId, role = 'author') => {
@@ -172,6 +213,8 @@ export function AuthProvider({ children }) {
     changePassword,
     users,
     updateUserRole,
+    updateUserStatus,
+    createEmployeeUser,
     approveAuthorApplication,
     hasRole: (...roles) => Boolean(currentUser && roles.includes(currentUser.role)),
     can: (permission) =>

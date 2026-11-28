@@ -7,11 +7,12 @@ const EMPLOYEE_EXPENSES_KEY = 'hosonta_employee_expenses';
 const MARKETING_COSTS_KEY = 'hosonta_marketing_costs';
 
 export const COST_TYPES = [
+  'Binding',
+  'Cover & Design',
+  'Manuscript',
+  'Transport',
   'Printing',
   'Paper',
-  'Design',
-  'Editing',
-  'Binding',
   'Other',
 ];
 
@@ -289,14 +290,29 @@ export function getBookCosts(monthStr) {
   return all.filter(item => (item.date || '').slice(0, 7) === monthStr);
 }
 
-export function addBookCost({ bookId, bookName, costType, amount, date, note }) {
+export function addBookCost({
+  bookId,
+  bookName,
+  costType,
+  amount,
+  dueAmount = 0,
+  payeeName = '',
+  expenseProfileId = '',
+  method = 'Cash',
+  date,
+  note,
+}) {
   const all = readStorage(BOOK_COSTS_KEY, initialBookCosts);
   const newRecord = {
     id: `BC-${Date.now().toString().slice(-4)}`,
     bookId: Number(bookId) || bookId,
     bookName: bookName || 'বই',
-    costType: costType || 'Printing',
+    costType: costType || 'Binding',
     amount: Number(amount) || 0,
+    dueAmount: Math.max(0, Number(dueAmount) || 0),
+    payeeName: payeeName || '',
+    expenseProfileId: expenseProfileId || '',
+    method: method || 'Cash',
     date: date || new Date().toISOString().slice(0, 10),
     note: note || '',
   };
@@ -381,6 +397,8 @@ export function addEmployeeExpense({
   employeeName,
   expenseType,
   amount,
+  dueAmount = 0,
+  expenseProfileId = '',
   date,
   note,
 }) {
@@ -391,6 +409,8 @@ export function addEmployeeExpense({
     employeeName: employeeName || 'কর্মচারী',
     expenseType: expenseType || 'Salary',
     amount: Number(amount) || 0,
+    dueAmount: Math.max(0, Number(dueAmount) || 0),
+    expenseProfileId: expenseProfileId || '',
     date: date || new Date().toISOString().slice(0, 10),
     note: note || '',
   };
@@ -426,6 +446,8 @@ export function addMarketingCost({
   bookId,
   bookName,
   amount,
+  dueAmount = 0,
+  expenseProfileId = '',
   date,
   note,
 }) {
@@ -436,6 +458,8 @@ export function addMarketingCost({
     bookId: bookId || '',
     bookName: bookName || 'সার্বিক প্রচার',
     amount: Number(amount) || 0,
+    dueAmount: Math.max(0, Number(dueAmount) || 0),
+    expenseProfileId: expenseProfileId || '',
     date: date || new Date().toISOString().slice(0, 10),
     note: note || '',
   };

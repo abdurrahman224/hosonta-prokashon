@@ -13,6 +13,7 @@ import StatusBadge from '../../../components/dashboard/StatusBadge';
 import { useAuth } from '../../../context/useAuth';
 import { useData } from '../../../context/useData';
 import books from '../../../data/books';
+import { getBookPath } from '../../../utils/bookSlug';
 
 const statusTabs = [
   { value: '', label: 'All' },
@@ -228,7 +229,7 @@ function MyOrders() {
                     className="flex gap-3 px-3.5 py-3 sm:gap-4 sm:px-6 sm:py-4"
                   >
                     <Link
-                      to={`/books/${item.bookId}`}
+                      to={getBookPath(item.bookId, books)}
                       className="flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md border border-dark/10 bg-cream sm:h-20 sm:w-16"
                       aria-label={item.title}
                     >
@@ -248,7 +249,7 @@ function MyOrders() {
                     </Link>
                     <div className="min-w-0 flex-1">
                       <Link
-                        to={`/books/${item.bookId}`}
+                        to={getBookPath(item.bookId, books)}
                         className="line-clamp-2 text-[13px] font-semibold leading-snug text-dark hover:underline sm:text-base"
                       >
                         {item.title}
@@ -265,7 +266,7 @@ function MyOrders() {
                           <button
                             type="button"
                             onClick={() =>
-                              navigate(`/books/${item.bookId}#reviews`)
+                              navigate(`${getBookPath(item.bookId, books)}#reviews`)
                             }
                             className="text-[11px] font-semibold text-blue-600 hover:underline sm:text-sm"
                           >

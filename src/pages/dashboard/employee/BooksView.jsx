@@ -7,6 +7,7 @@ import PageHeader from '../../../components/dashboard/PageHeader';
 import StatusBadge from '../../../components/dashboard/StatusBadge';
 import ConfirmModal from '../../../components/dashboard/ConfirmModal';
 import { useData } from '../../../context/useData';
+import { getCategoryLabel } from '../../../utils/i18n';
 
 const formatTaka = value =>
   `৳${Number(value || 0).toLocaleString('en-BD', { maximumFractionDigits: 2 })}`;
@@ -24,8 +25,6 @@ const formatDateTime = value => {
   });
 };
 
-const OFFER_PRESETS = [0, 10, 15, 20, 25, 30, 40, 50];
-
 const getRetail = book => Number(book.retailPrice ?? book.price ?? 0);
 const getOffer = book => Number(book.offer ?? 0);
 // Sale price = retail price minus the offer percentage
@@ -35,18 +34,6 @@ const getSale = book =>
   book.retailPrice != null
     ? calcSale(book.retailPrice, book.offer)
     : Number(book.salePrice ?? book.price ?? 0);
-
-const emptyForm = {
-  title: '',
-  author: '',
-  category: '',
-  sku: '',
-  wholesalePrice: '',
-  retailPrice: '',
-  offer: '0',
-  stock: '',
-  status: 'draft',
-};
 
 /* Demo data: shown only while the context has no real edit history.
    Remove this block (and the fallback in BooksView) once `bookEditHistory` is wired up. */
@@ -156,22 +143,16 @@ function Tabs({ active, onChange, tabs }) {
             role="tab"
             aria-selected={isActive}
             onClick={() => onChange(tab.id)}
-            className={`-mb-px flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 pb-3 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 ${
+            className={`-mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 pb-2.5 text-sm font-semibold transition-colors focus-visible:outline-none ${
               isActive
-                ? 'border-indigo-600 text-indigo-700'
+                ? 'border-slate-900 text-slate-900'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
             }`}
           >
             {tab.label}
             {tab.count !== undefined && (
-              <span
-                className={`rounded-full px-2 py-0.5 text-xs ${
-                  isActive
-                    ? 'bg-indigo-50 text-indigo-700'
-                    : 'bg-slate-100 text-slate-500'
-                }`}
-              >
-                {tab.count}
+              <span className="text-xs font-medium text-slate-400">
+                ({tab.count})
               </span>
             )}
           </button>
@@ -190,8 +171,8 @@ function MarginBadge({ wholesale, sale }) {
   const positive = profit >= 0;
   return (
     <span
-      className={`inline-flex items-center whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold ${
-        positive ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+      className={`whitespace-nowrap text-xs font-semibold ${
+        positive ? 'text-slate-700' : 'text-rose-600'
       }`}
     >
       {positive ? '+' : ''}
@@ -247,10 +228,6 @@ function BooksView() {
     return { totalStock, stockValue, lowStock };
   }, [books]);
 
-  const handleAddBook = payload => {
-    if (typeof addBook === 'function') addBook(payload);
-  };
-
   const handleConfirmDelete = () => {
     if (!bookToDelete) return;
     try {
@@ -269,39 +246,39 @@ function BooksView() {
     <>
       <PageHeader
         title="All Books"
-        description="Manage the catalog, prices, and inventory in one place."
+        description="Manage book catalog, pricing, and inventory."
       />
 
       {/* Summary + primary action */}
-      <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:gap-4 lg:flex-row lg:items-stretch">
-        <div className="grid flex-1 grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
+      <div className="mb-5 flex flex-col gap-3 sm:mb-6 lg:flex-row lg:items-stretch">
+        <div className="grid flex-1 grid-cols-2 gap-3 xl:grid-cols-4">
           <StatCard
-            label="Total titles"
+            label="Total Titles"
             value={books.length}
             hint={`${categories.length} categories`}
           />
           <StatCard
-            label="Total stock"
+            label="Total Stock"
             value={stats.totalStock.toLocaleString()}
-            hint="Copies in inventory"
+            hint="Copies"
           />
           <StatCard
-            label="Stock value"
+            label="Stock Value"
             value={formatTaka(stats.stockValue)}
-            hint="At wholesale price"
+            hint="Wholesale"
           />
           <StatCard
-            label="Low stock"
+            label="Low Stock"
             value={stats.lowStock}
-            hint="5 copies or fewer"
+            hint="5 or fewer"
           />
         </div>
         <Link
           to="/dashboard/books/new"
-          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-dark shadow-xs transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 lg:w-auto lg:self-start"
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-primary px-5 py-2.5 text-xs font-bold text-dark transition hover:bg-primary-hover lg:w-auto lg:self-start"
         >
-          <span className="text-lg leading-none">+</span>
-          Add book
+          <span className="text-base leading-none">+</span>
+          Add Book
         </Link>
       </div>
 
@@ -309,21 +286,20 @@ function BooksView() {
         active={activeTab}
         onChange={setActiveTab}
         tabs={[
-          { id: 'catalog', label: 'Book Catalog', count: books.length },
+          { id: 'catalog', label: 'Catalog', count: books.length },
           { id: 'history', label: 'Edit History', count: history.length },
         ]}
       />
 
-      <div className="mt-5 min-w-0 sm:mt-6">
+      <div className="mt-5 min-w-0">
         {activeTab === 'catalog' ? (
-          // Keeps the wide table scrolling inside this box instead of
-          // stretching the whole page sideways on small screens.
           <div className="max-w-full overflow-x-auto">
             <DataTable
               title="Book Catalog"
               data={books}
+              selectable={false}
               searchKeys={['title', 'author', 'category', 'publisher']}
-              searchPlaceholder="Search title, author, category, or publisher..."
+              searchPlaceholder="Search title, author, category..."
               filters={[
                 {
                   key: 'publisher',
@@ -342,7 +318,7 @@ function BooksView() {
                   label: 'All Categories',
                   options: categories.map(category => ({
                     value: category,
-                    label: category,
+                    label: getCategoryLabel(category),
                   })),
                 },
                 {
@@ -358,14 +334,13 @@ function BooksView() {
               columns={[
                 {
                   key: 'title',
-                  header: 'Book Details',
-                  // sortable: true,
+                  header: 'Book',
                   render: book => (
                     <div className="flex min-w-[200px] items-center gap-3">
                       <img
                         src={book.cover}
                         alt=""
-                        className="h-12 w-9 shrink-0 rounded-md border border-slate-200 object-cover"
+                        className="h-11 w-8 shrink-0 rounded border border-slate-200 object-cover"
                       />
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-slate-900">
@@ -374,9 +349,6 @@ function BooksView() {
                         <p className="truncate text-xs text-slate-500">
                           {book.author}
                         </p>
-                        <span className="mt-0.5 inline-block truncate text-[11px] font-medium text-amber-700">
-                          {book.publisher || 'হসন্ত প্রকাশন'}
-                        </span>
                       </div>
                     </div>
                   ),
@@ -384,35 +356,32 @@ function BooksView() {
                 {
                   key: 'category',
                   header: 'Category',
-                  // sortable: true,
                   render: book => (
-                    <span className="whitespace-nowrap rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">
-                      {book.category}
+                    <span className="whitespace-nowrap text-xs text-slate-600">
+                      {getCategoryLabel(book.category)}
                     </span>
                   ),
                 },
                 {
                   key: 'wholesalePrice',
-                  header: 'Wholesale Price',
-                  // sortable: true,
+                  header: 'Wholesale',
                   sortValue: book => Number(book.wholesalePrice || 0),
                   render: book => (
-                    <span className="whitespace-nowrap font-medium text-slate-700">
+                    <span className="whitespace-nowrap text-slate-700">
                       {formatTaka(book.wholesalePrice)}
                     </span>
                   ),
                 },
                 {
                   key: 'retailPrice',
-                  header: 'Retail Price',
-                  // sortable: true,
+                  header: 'Retail',
                   sortValue: book => getRetail(book),
                   render: book => (
                     <span
                       className={`whitespace-nowrap ${
                         getOffer(book)
                           ? 'text-slate-400 line-through'
-                          : 'font-medium text-slate-700'
+                          : 'text-slate-700'
                       }`}
                     >
                       {formatTaka(getRetail(book))}
@@ -422,21 +391,19 @@ function BooksView() {
                 {
                   key: 'offer',
                   header: 'Offer',
-                  // sortable: true,
                   sortValue: book => getOffer(book),
                   render: book =>
                     getOffer(book) ? (
-                      <span className="whitespace-nowrap rounded-md bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700">
+                      <span className="whitespace-nowrap text-xs font-medium text-slate-700">
                         {getOffer(book)}% OFF
                       </span>
                     ) : (
-                      <span className="text-xs text-slate-400">N/A</span>
+                      <span className="text-xs text-slate-400">—</span>
                     ),
                 },
                 {
                   key: 'salePrice',
                   header: 'Sale Price',
-                  // sortable: true,
                   sortValue: book => getSale(book),
                   render: book => (
                     <span className="whitespace-nowrap font-semibold text-slate-900">
@@ -447,7 +414,6 @@ function BooksView() {
                 {
                   key: 'profit',
                   header: 'Profit',
-                  // sortable: true,
                   sortValue: book =>
                     getSale(book) - Number(book.wholesalePrice || 0),
                   render: book => (
@@ -460,7 +426,6 @@ function BooksView() {
                 {
                   key: 'stock',
                   header: 'Stock',
-                  // sortable: true,
                   sortValue: book => Number(book.stock || 0),
                   render: book => {
                     const stock = Number(book.stock || 0);
@@ -487,38 +452,39 @@ function BooksView() {
                 {
                   key: 'actions',
                   header: 'Actions',
+                  align: 'right',
                   render: book => (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center justify-end gap-1">
                       <Link
                         to={`/dashboard/books/${book.id}`}
-                        className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-indigo-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-                        title="View Book Details"
+                        className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                        title="View"
                         aria-label={`View ${book.title}`}
                       >
-                        <FiEye className="text-base" />
+                        <FiEye size={15} />
                       </Link>
                       <Link
                         to={`/dashboard/books/edit/${book.id}`}
-                        className="rounded-lg p-1.5 text-slate-500 transition hover:bg-amber-50 hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
-                        title="Edit Book"
+                        className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+                        title="Edit"
                         aria-label={`Edit ${book.title}`}
                       >
-                        <FiEdit2 className="text-base" />
+                        <FiEdit2 size={15} />
                       </Link>
                       <button
                         type="button"
                         onClick={() => setBookToDelete(book)}
-                        className="rounded-lg p-1.5 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
-                        title="Delete Book"
+                        className="rounded-lg p-1.5 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"
+                        title="Delete"
                         aria-label={`Delete ${book.title}`}
                       >
-                        <FiTrash2 className="text-base" />
+                        <FiTrash2 size={15} />
                       </button>
                     </div>
                   ),
                 },
               ]}
-              emptyMessage="No books found. Use “Add book” to create the first one."
+              emptyMessage="No books found."
             />
           </div>
         ) : (
@@ -573,7 +539,7 @@ function ActionBadge({ action }) {
 
 function Avatar({ name }) {
   return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-semibold text-indigo-700">
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700">
       {(name || '?').slice(0, 1).toUpperCase()}
     </span>
   );
@@ -582,11 +548,8 @@ function Avatar({ name }) {
 function EditHistoryTable({ history }) {
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
-        <h3 className="text-base font-semibold text-slate-900">Edit History</h3>
-        <p className="mt-0.5 text-sm text-slate-500">
-          See who changed which book, and when.
-        </p>
+      <div className="border-b border-slate-100 px-4 py-3.5 sm:px-5">
+        <h3 className="text-sm font-semibold text-slate-900">Edit History</h3>
       </div>
 
       {history.length === 0 ? (

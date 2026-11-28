@@ -5,6 +5,7 @@ import { initialPublishers } from '../data/publishers'
 import { getStoredBooks, saveStoredBooks } from '../utils/authorStorage'
 import { hasPermission, PERMISSIONS } from '../utils/roles'
 import { addActivityLog } from '../utils/moderationStorage'
+import { getBookPath } from '../utils/bookSlug'
 import DataContext from './DataContextValue'
 
 const ORDERS_KEY = 'hosonta_orders'
@@ -211,7 +212,7 @@ export function DataProvider({ children }) {
     }
     saveReviews([review, ...reviews])
     createNotifications([
-      { userId: book.authorId, role: 'author', type: 'new-review', title: 'আপনার বইয়ে নতুন রিভিউ এসেছে।', link: `/books/${book.id}#reviews` },
+      { userId: book.authorId, role: 'author', type: 'new-review', title: 'আপনার বইয়ে নতুন রিভিউ এসেছে।', link: `${getBookPath(book, books)}#reviews` },
       { role: 'moderator', type: 'pending-review', title: 'নতুন রিভিউ অনুমোদনের অপেক্ষায় আছে।', link: '/dashboard/review-moderation' },
       { role: 'admin', type: 'pending-review', title: 'নতুন রিভিউ অনুমোদনের অপেক্ষায় আছে।', link: '/dashboard/review-moderation' },
     ])
@@ -251,7 +252,7 @@ export function DataProvider({ children }) {
         type: 'review-decision',
         title: input.status === 'approved' ? 'আপনার রিভিউ অনুমোদিত হয়েছে।' : `আপনার রিভিউ ${input.status === 'rejected' ? 'প্রত্যাখ্যান' : 'লুকানো'} হয়েছে।`,
         message: input.moderatorNote ?? '',
-        link: `/books/${existing.bookId}#reviews`,
+        link: `${getBookPath(existing.bookId, books)}#reviews`,
       }])
     }
     return { success: true }
@@ -389,13 +390,29 @@ export function DataProvider({ children }) {
     return { success: true }
   }
 
-  const updateBookStock = (bookId, delta, reason, userId) => {
+  const updateBookStock = (bookId, delta, reason, userId, meta = {}) => {
     const amount = Number(delta)
-    if (!Number.isInteger(amount) || amount === 0 || !reason.trim()) return { success: false, message: 'পরিমাণ ও কারণ সঠিকভাবে দিন।' }
+    if (!Number.isInteger(amount) || amount === 0 || !reason.trim()) return { success: false, message: 'Enter a valid quantity and reason.' }
     const book = books.find((item) => String(item.id) === String(bookId))
-    if (!book || Number(book.stock) + amount < 0) return { success: false, message: 'স্টক শূন্যের নিচে যেতে পারে না।' }
-    const nextBooks = books.map((item) => item.id === book.id ? { ...item, stock: Number(item.stock) + amount } : item)
-    const historyEntry = { id: `stock-${Date.now()}`, bookId: book.id, bookTitle: book.title, delta: amount, reason: reason.trim(), userId, createdAt: new Date().toISOString() }
+    if (!book || Number(book.stock) + amount < 0) return { success: false, message: 'Stock cannot go below zero.' }
+    const previousStock = Number(book.stock || 0)
+    const newStock = previousStock + amount
+    const nextBooks = books.map((item) => item.id === book.id ? { ...item, stock: newStock } : item)
+    const historyEntry = {
+      id: `stock-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      bookId: book.id,
+      bookTitle: book.title,
+      unitPrice: Number(book.price || 0),
+      previousStock,
+      newStock,
+      delta: amount,
+      reason: reason.trim(),
+      channel: meta.channel || 'manual',
+      userId,
+      userName: meta.userName,
+      userRole: meta.userRole,
+      createdAt: new Date().toISOString(),
+    }
     const nextHistory = [historyEntry, ...stockHistory]
     setBooks(nextBooks)
     setStockHistory(nextHistory)

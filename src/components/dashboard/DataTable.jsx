@@ -1,11 +1,9 @@
 import { useMemo, useState } from 'react'
 import {
-  FiChevronLeft,
-  FiChevronRight,
-  FiMoreVertical,
   FiSearch,
   FiX,
 } from 'react-icons/fi'
+import Pagination from '../common/Pagination'
 import useSearch from '../../hooks/useSearch'
 
 function DataTable({
@@ -152,23 +150,6 @@ function DataTable({
     }
   }
 
-  const startIndex = sortedRows.length === 0 ? 0 : (currentPage - 1) * effectivePageSize + 1
-  const endIndex = Math.min(currentPage * effectivePageSize, sortedRows.length)
-
-  // Smart page numbers array for pagination bar
-  const pageNumbers = useMemo(() => {
-    if (totalPages <= 7) {
-      return Array.from({ length: totalPages }, (_, i) => i + 1)
-    }
-    if (currentPage <= 3) {
-      return [1, 2, 3, 4, '...', totalPages]
-    }
-    if (currentPage >= totalPages - 2) {
-      return [1, '...', totalPages - 3, totalPages - 2, totalPages - 1, totalPages]
-    }
-    return [1, '...', currentPage - 1, currentPage, currentPage + 1, '...', totalPages]
-  }, [currentPage, totalPages])
-
   const hasHeaderContent = Boolean(
     title ||
       subtitle ||
@@ -269,8 +250,8 @@ function DataTable({
               </div>
             )}
 
-            {/* Dropdown Filters styled as clean buttons */}
-            {/* {filters.length > 0 && (
+            {/* Dropdown Filters */}
+            {filters.length > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 {filters.map(filter => (
                   <select
@@ -280,7 +261,7 @@ function DataTable({
                       updateFilter(filter.key, event.target.value)
                     }
                     aria-label={filter.label}
-                    className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600 outline-none transition hover:border-slate-300 focus:border-blue-500 focus:outline-none focus-visible:outline-none"
+                    className="h-10 rounded-lg border border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 outline-none transition hover:border-slate-300 focus:border-slate-500"
                   >
                     <option value="">{filter.label}</option>
                     {filter.options.map(option => (
@@ -291,7 +272,7 @@ function DataTable({
                   </select>
                 ))}
               </div>
-            )} */}
+            )}
           </div>
         </div>
       )}
@@ -320,7 +301,7 @@ function DataTable({
                   column.align === 'center'
                     ? 'text-center'
                     : column.align === 'right'
-                      ? 'text-center'
+                      ? 'text-right'
                       : 'text-left';
 
                 return (
@@ -338,7 +319,7 @@ function DataTable({
 
               {rowActions && (
                 <th
-                  className="w-14 px-3 py-3 text-right font-medium"
+                  className="w-14 whitespace-nowrap px-3 py-3 text-right font-medium"
                   aria-label="Actions"
                 />
               )}
@@ -469,99 +450,19 @@ function DataTable({
         </table>
       </div>
 
-      {/* 3. Footer: "Showing X to Y of Z" on left, blue page button on right */}
+      {/* 3. Shared Pagination */}
       {pagination && !loading && sortedRows.length > 0 && (
-        <div className="grid gap-3 border-t border-slate-100 px-5 py-4 text-sm text-slate-500 md:grid-cols-[1fr_auto_1fr] md:items-center">
-          <div className="flex items-center gap-2">
-            <span>Show</span>
-            <select
-              value={rowsPerPage}
-              onChange={event => {
-                setRowsPerPage(Number(event.target.value));
-                setPage(1);
-              }}
-              className="h-9 rounded-lg border border-slate-200 bg-white px-2 text-sm font-medium text-slate-700 outline-none focus:border-blue-500 focus:outline-none focus-visible:outline-none"
-              aria-label="Rows per page"
-            >
-              {[10, 25, 50, 100].map(size => (
-                <option key={size} value={size}>
-                  {size}
-                </option>
-              ))}
-            </select>
-            <span>entries</span>
-          </div>
-
-          <div className="text-left md:text-center">
-            Showing{' '}
-            <strong className="font-semibold text-slate-800">
-              {startIndex}
-            </strong>{' '}
-            to{' '}
-            <strong className="font-semibold text-slate-800">{endIndex}</strong>{' '}
-            of{' '}
-            <strong className="font-semibold text-slate-800">
-              {sortedRows.length}
-            </strong>{' '}
-            entries
-          </div>
-
-          <div className="flex items-center justify-start md:justify-end gap-1">
-            {/* Prev Button */}
-            <button
-              type="button"
-              disabled={currentPage === 1}
-              onClick={() => setPage(currentPage - 1)}
-              className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
-              aria-label="Previous page"
-            >
-              <FiChevronLeft size={16} />
-            </button>
-
-            {/* Page Numbers */}
-            <div className="flex items-center gap-1">
-              {pageNumbers.map((pageNum, idx) => {
-                if (pageNum === '...') {
-                  return (
-                    <span
-                      key={`ellipsis-${idx}`}
-                      className="px-2 py-1 text-slate-400 select-none"
-                    >
-                      ...
-                    </span>
-                  );
-                }
-
-                const isActive = pageNum === currentPage;
-                return (
-                  <button
-                    key={pageNum}
-                    type="button"
-                    onClick={() => setPage(pageNum)}
-                    className={`min-w-[28px] rounded-lg px-2.5 py-1 text-xs font-semibold transition ${
-                      isActive
-                        ? 'bg-blue-600 text-white shadow-xs font-bold'
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    }`}
-                  >
-                    {pageNum}
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Next Button */}
-            <button
-              type="button"
-              disabled={currentPage === totalPages}
-              onClick={() => setPage(currentPage + 1)}
-              className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
-              aria-label="Next page"
-            >
-              <FiChevronRight size={16} />
-            </button>
-          </div>
-        </div>
+        <Pagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          totalItems={sortedRows.length}
+          pageSize={rowsPerPage}
+          onPageChange={setPage}
+          onPageSizeChange={size => {
+            setRowsPerPage(size);
+            setPage(1);
+          }}
+        />
       )}
     </div>
   );

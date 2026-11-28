@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from './useAuth'
 import { useData } from './useData'
 import CartContext from './CartContextValue'
+import { getBookPricing } from '../utils/bookHelpers'
 
 const GUEST_CART_KEY = 'hosonta_cart_guest'
 
@@ -85,7 +86,7 @@ export function CartProvider({ children }) {
   const clearCart = () => setCartState({ key: activeKey, items: [] })
   const items = useMemo(() => cartItems.map((item) => {
     const book = books.find((entry) => String(entry.id) === String(item.bookId))
-    return book ? { ...item, book, lineTotal: toNumber(book.price) * item.quantity } : null
+    return book ? { ...item, book, lineTotal: getBookPricing(book).sellingPrice * item.quantity } : null
   }).filter(Boolean), [books, cartItems])
   const cartTotal = items.reduce((total, item) => total + item.lineTotal, 0)
   const cartCount = items.reduce((total, item) => total + item.quantity, 0)

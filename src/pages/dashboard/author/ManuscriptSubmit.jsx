@@ -63,7 +63,19 @@ function ManuscriptSubmit() {
     setErrors(current => ({ ...current, file: '' }));
   };
 
-  const handleSubmit = event => {
+  const readFileAsDataUrl = selectedFile =>
+    new Promise(resolve => {
+      if (!selectedFile || selectedFile.size > 1.5 * 1024 * 1024) {
+        resolve(null);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(selectedFile);
+    });
+
+  const handleSubmit = async event => {
     event.preventDefault();
     if (isPending) return;
     const nextErrors = {};
@@ -77,21 +89,28 @@ function ManuscriptSubmit() {
       return;
     }
     const trimmedText = mode === 'text' ? form.text.trim() : '';
+    const fileDataUrl = mode === 'file' ? await readFileAsDataUrl(file) : null;
     const nextManuscripts = [
       ...manuscripts,
       {
         id: `manuscript-${Date.now()}`,
         authorId: currentUser.id,
+        authorName: currentUser.name,
+        authorEmail: currentUser.email,
         title: form.title.trim(),
         type: form.type,
+        submitMode: mode,
         text: trimmedText,
         wordCount: trimmedText ? countWords(trimmedText) : 0,
         summary: trimmedText.slice(0, 200),
         comments: '',
         fileName: mode === 'file' ? file.name : '',
+        fileSize: mode === 'file' ? file.size : 0,
+        fileType: mode === 'file' ? file.type : '',
+        fileDataUrl,
         status: 'submitted',
         feedback: '',
-        submittedAt: new Date().toLocaleDateString('en-GB'),
+        submittedAt: new Date().toISOString(),
       },
     ];
     saveStoredManuscripts(nextManuscripts);

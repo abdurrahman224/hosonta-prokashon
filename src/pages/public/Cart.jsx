@@ -23,6 +23,8 @@ import { useAuth } from '../../context/useAuth';
 import { useCart } from '../../context/useCart';
 import { useWishlist } from '../../context/useWishlist';
 import useFormat from '../../hooks/useFormat';
+import { getBookPath } from '../../utils/bookSlug';
+import { getBookPricing } from '../../utils/bookHelpers';
 
 const COUPON_CODE = 'HASANTA10';
 const COUPON_RATE = 0.1;
@@ -364,7 +366,7 @@ function CartItem({
       }`}
     >
       <Link
-        to={`/books/${book.id}`}
+        to={getBookPath(book)}
         className="shrink-0 self-start overflow-hidden rounded-md bg-cream shadow-sm"
       >
         <img
@@ -376,7 +378,7 @@ function CartItem({
 
       <div className="flex min-w-0 flex-1 flex-col">
         <Link
-          to={`/books/${book.id}`}
+          to={getBookPath(book)}
           className="line-clamp-2 font-heading text-sm font-bold leading-snug text-dark transition-colors hover:text-primary-hover sm:text-base"
         >
           {title}
@@ -387,7 +389,13 @@ function CartItem({
 
         <div className="mt-2 flex items-baseline justify-between gap-2">
           <p className="text-xs text-dark-muted sm:text-sm">
-            {formatCurrency(book.price)} প্রতিটি
+            {formatCurrency(getBookPricing(book).sellingPrice)}{' '}
+            {getBookPricing(book).hasDiscount && (
+              <span className="line-through opacity-75">
+                {formatCurrency(getBookPricing(book).originalPrice)}
+              </span>
+            )}{' '}
+            প্রতিটি
           </p>
           <p className="text-base font-bold text-dark sm:text-base">
             {formatCurrency(lineTotal)}

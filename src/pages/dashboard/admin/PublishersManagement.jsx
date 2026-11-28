@@ -126,7 +126,7 @@ const CancelBtn = ({ onClick }) => (
     onClick={onClick}
     className="rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
   >
-    বাতিল
+    Cancel
   </button>
 );
 
@@ -154,26 +154,26 @@ function PublisherModal({ initial, isEdit, onClose, onSave }) {
 
   return (
     <ModalShell
-      title={isEdit ? 'প্রকাশনী তথ্য সম্পাদনা' : 'নতুন প্রকাশনী যুক্ত করুন'}
+      title={isEdit ? 'Edit Publisher' : 'Add Publisher'}
       onClose={onClose}
       onSubmit={submit}
       footer={
         <>
           <CancelBtn onClick={onClose} />
-          <SubmitBtn>{isEdit ? 'আপডেট করুন' : 'সংরক্ষণ করুন'}</SubmitBtn>
+          <SubmitBtn>{isEdit ? 'Save Changes' : 'Save Publisher'}</SubmitBtn>
         </>
       }
     >
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className={labelCls}>
-            প্রকাশনীর নাম (বাংলা) <span className="text-red-500">*</span>
+            Publisher Name <span className="text-red-500">*</span>
           </label>
           <input
             required
             value={form.name}
             onChange={set('name')}
-            placeholder="যেমন: হসন্ত প্রকাশন"
+            placeholder="e.g. Hosonta Prokashon"
             className={inputCls}
           />
         </div>
@@ -190,7 +190,7 @@ function PublisherModal({ initial, isEdit, onClose, onSave }) {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div>
-          <label className={labelCls}>কোড</label>
+          <label className={labelCls}>Code</label>
           <input
             value={form.code}
             onChange={set('code')}
@@ -199,40 +199,40 @@ function PublisherModal({ initial, isEdit, onClose, onSave }) {
           />
         </div>
         <div>
-          <label className={labelCls}>প্রতিষ্ঠা সাল</label>
+          <label className={labelCls}>Established</label>
           <input
             value={form.established}
             onChange={set('established')}
-            placeholder="২০২৬"
+            placeholder="2026"
             className={inputCls}
           />
         </div>
         <div>
-          <label className={labelCls}>স্ট্যাটাস</label>
+          <label className={labelCls}>Status</label>
           <select
             value={form.status}
             onChange={set('status')}
             className={inputCls}
           >
-            <option value="active">সক্রিয়</option>
-            <option value="inactive">নিষ্ক্রিয়</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
           </select>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className={labelCls}>ফোন নম্বর</label>
+          <label className={labelCls}>Phone</label>
           <input
             type="tel"
             value={form.phone}
             onChange={set('phone')}
-            placeholder="০১৮১২-৩৪৫৬৭৮"
+            placeholder="+880..."
             className={inputCls}
           />
         </div>
         <div>
-          <label className={labelCls}>ইমেইল</label>
+          <label className={labelCls}>Email</label>
           <input
             type="email"
             value={form.email}
@@ -244,17 +244,17 @@ function PublisherModal({ initial, isEdit, onClose, onSave }) {
       </div>
 
       <div>
-        <label className={labelCls}>ঠিকানা</label>
+        <label className={labelCls}>Address</label>
         <input
           value={form.address}
           onChange={set('address')}
-          placeholder="৩৮/২ বাংলাবাজার, ঢাকা-১১০০"
+          placeholder="38/2 Banglabazar, Dhaka-1100"
           className={inputCls}
         />
       </div>
 
       <div>
-        <label className={labelCls}>ওয়েবসাইট (ঐচ্ছিক)</label>
+        <label className={labelCls}>Website (optional)</label>
         <input
           value={form.website}
           onChange={set('website')}
@@ -264,7 +264,7 @@ function PublisherModal({ initial, isEdit, onClose, onSave }) {
       </div>
 
       <div>
-        <label className={labelCls}>লোগো (URL)</label>
+        <label className={labelCls}>Logo URL</label>
         <div className="flex items-center gap-3">
           <img
             src={form.logo || DEFAULT_LOGOS[0]}
@@ -284,12 +284,12 @@ function PublisherModal({ initial, isEdit, onClose, onSave }) {
       </div>
 
       <div>
-        <label className={labelCls}>পরিচিতি / বিবরণ</label>
+        <label className={labelCls}>Description</label>
         <textarea
           rows={3}
           value={form.description}
           onChange={set('description')}
-          placeholder="প্রকাশনীর সংক্ষিপ্ত পরিচিতি..."
+          placeholder="Short publisher bio..."
           className="w-full rounded-xl border border-slate-200 p-3 text-base focus:border-primary focus:outline-none sm:text-sm"
         />
       </div>
@@ -322,13 +322,13 @@ function BookModal({ publisher, book, categories, onClose, onSave }) {
   const submit = e => {
     e.preventDefault();
     if (!form.title.trim() || !form.author.trim()) {
-      toast.error('বইয়ের নাম ও লেখকের নাম আবশ্যক');
+      toast.error('Book title and author are required');
       return;
     }
     const price = Number(form.price || 0);
     const sale = form.salePrice === '' ? price : Number(form.salePrice);
     if (sale > price) {
-      toast.error('বিক্রয় মূল্য মূল্যের চেয়ে বেশি হতে পারবে না');
+      toast.error('Sale price cannot exceed regular price');
       return;
     }
     onSave({
@@ -346,25 +346,25 @@ function BookModal({ publisher, book, categories, onClose, onSave }) {
 
   return (
     <ModalShell
-      title={isEdit ? 'বই সম্পাদনা' : 'নতুন বই যোগ করুন'}
-      subtitle={`প্রকাশনী: ${publisher.name}`}
+      title={isEdit ? 'Edit Book' : 'Add Book'}
+      subtitle={`Publisher: ${publisher.name}`}
       onClose={onClose}
       onSubmit={submit}
       footer={
         <>
           <CancelBtn onClick={onClose} />
-          <SubmitBtn>{isEdit ? 'আপডেট করুন' : 'বই সংরক্ষণ করুন'}</SubmitBtn>
+          <SubmitBtn>{isEdit ? 'Save Changes' : 'Save Book'}</SubmitBtn>
         </>
       }
     >
       <div>
         <label className={labelCls}>
-          বইয়ের নাম <span className="text-red-500">*</span>
+          Book Title <span className="text-red-500">*</span>
         </label>
         <input
           value={form.title}
           onChange={set('title')}
-          placeholder="বইয়ের নাম"
+          placeholder="Book title"
           className={inputCls}
         />
       </div>
@@ -372,22 +372,22 @@ function BookModal({ publisher, book, categories, onClose, onSave }) {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
           <label className={labelCls}>
-            লেখক <span className="text-red-500">*</span>
+            Author <span className="text-red-500">*</span>
           </label>
           <input
             value={form.author}
             onChange={set('author')}
-            placeholder="লেখকের নাম"
+            placeholder="Author name"
             className={inputCls}
           />
         </div>
         <div>
-          <label className={labelCls}>ক্যাটাগরি</label>
+          <label className={labelCls}>Category</label>
           <input
             list="publisher-book-categories"
             value={form.category}
             onChange={set('category')}
-            placeholder="নির্বাচন করুন বা লিখুন"
+            placeholder="Select or type"
             className={inputCls}
           />
           <datalist id="publisher-book-categories">
@@ -400,7 +400,7 @@ function BookModal({ publisher, book, categories, onClose, onSave }) {
 
       <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2">
         <div>
-          <label className={labelCls}>মূল্য (৳)</label>
+          <label className={labelCls}>Price (৳)</label>
           <input
             type="number"
             inputMode="decimal"
@@ -412,14 +412,14 @@ function BookModal({ publisher, book, categories, onClose, onSave }) {
           />
         </div>
         <div>
-          <label className={labelCls}>বিক্রয় মূল্য (৳)</label>
+          <label className={labelCls}>Sale Price (৳)</label>
           <input
             type="number"
             inputMode="decimal"
             min="0"
             value={form.salePrice}
             onChange={set('salePrice')}
-            placeholder="খালি রাখলে মূল্যের সমান"
+            placeholder="Defaults to regular price"
             className={inputCls}
           />
         </div>
@@ -427,7 +427,7 @@ function BookModal({ publisher, book, categories, onClose, onSave }) {
 
       <div className="grid grid-cols-1 gap-4 min-[420px]:grid-cols-2">
         <div>
-          <label className={labelCls}>স্টক (কপি)</label>
+          <label className={labelCls}>Stock</label>
           <input
             type="number"
             inputMode="numeric"
@@ -439,7 +439,7 @@ function BookModal({ publisher, book, categories, onClose, onSave }) {
           />
         </div>
         <div>
-          <label className={labelCls}>স্ট্যাটাস</label>
+          <label className={labelCls}>Status</label>
           <select
             value={form.status}
             onChange={set('status')}
@@ -453,7 +453,7 @@ function BookModal({ publisher, book, categories, onClose, onSave }) {
       </div>
 
       <div>
-        <label className={labelCls}>কভার ছবি (URL, ঐচ্ছিক)</label>
+        <label className={labelCls}>Cover Image URL (optional)</label>
         <input
           value={form.cover}
           onChange={set('cover')}
@@ -606,19 +606,19 @@ export default function PublishersManagement() {
   const savePublisher = form => {
     const editing = publisherModal?.editing;
     if (!form.name.trim()) {
-      toast.error('প্রকাশনীর নাম প্রদান করা বাধ্যতামূলক');
+      toast.error('Publisher name is required');
       return;
     }
     if (editing) {
       if (typeof updatePublisher === 'function')
         updatePublisher(editing.id, form);
-      toast.success(`"${form.name}" প্রকাশনীর তথ্য আপডেট করা হয়েছে`);
+      toast.success(`"${form.name}" updated`);
     } else {
       const exists = publishers.some(
         p => p.name.trim().toLowerCase() === form.name.trim().toLowerCase(),
       );
       if (exists) {
-        toast.error('এই নামের প্রকাশনী ইতিমধ্যে বিদ্যমান!');
+        toast.error('A publisher with this name already exists.');
         return;
       }
       const stamp = Date.now();
@@ -630,7 +630,7 @@ export default function PublishersManagement() {
           : `pub-${stamp}`,
       };
       if (typeof addPublisher === 'function') addPublisher(newPub);
-      toast.success(`"${form.name}" সফলভাবে যুক্ত হয়েছে`);
+      toast.success(`"${form.name}" added`);
       setSelectedPublisherId(newPub.id);
     }
     setPublisherModal(null);
@@ -641,13 +641,13 @@ export default function PublishersManagement() {
     try {
       if (typeof deletePublisher === 'function')
         deletePublisher(publisherToDelete.id);
-      toast.success(`"${publisherToDelete.name}" প্রকাশনীটি মুছে ফেলা হয়েছে`);
+      toast.success(`"${publisherToDelete.name}" deleted`);
       if (selectedPublisherId === publisherToDelete.id) {
         const remaining = publishers.filter(p => p.id !== publisherToDelete.id);
         setSelectedPublisherId(remaining[0]?.id || '');
       }
     } catch {
-      toast.error('প্রকাশনী মুছতে সমস্যা হয়েছে');
+      toast.error('Failed to delete publisher');
     } finally {
       setPublisherToDelete(null);
     }
@@ -659,12 +659,12 @@ export default function PublishersManagement() {
     const editing = bookModal?.book;
     if (editing) {
       if (typeof updateBook === 'function') updateBook(editing.id, payload);
-      toast.success(`"${payload.title}" আপডেট করা হয়েছে`);
+      toast.success(`"${payload.title}" updated`);
     } else {
       if (typeof addBook === 'function') {
         addBook({ ...payload, id: `book-${Date.now()}` });
       }
-      toast.success(`"${payload.title}" বইটি যুক্ত করা হয়েছে`);
+      toast.success(`"${payload.title}" added`);
     }
     setBookModal(null);
   };
@@ -673,9 +673,9 @@ export default function PublishersManagement() {
     if (!bookToDelete) return;
     try {
       if (typeof deleteBook === 'function') deleteBook(bookToDelete.id);
-      toast.success(`"${bookToDelete.title}" বইটি মুছে ফেলা হয়েছে`);
+      toast.success(`"${bookToDelete.title}" deleted`);
     } catch {
-      toast.error('বই মুছতে সমস্যা হয়েছে');
+      toast.error('Failed to delete book');
     } finally {
       setBookToDelete(null);
     }
@@ -684,29 +684,32 @@ export default function PublishersManagement() {
   /* ---------- Small action buttons for books ---------- */
 
   const BookActions = ({ book }) => (
-    <div className="flex items-center gap-1">
+    <div className="flex items-center justify-end gap-1">
       <Link
         to={`/dashboard/books/${book.id}`}
-        className="rounded-lg p-2 text-slate-500 transition hover:bg-slate-100 hover:text-indigo-600"
-        title="বিস্তারিত"
+        className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+        title="View Details"
+        aria-label={`View ${book.title}`}
       >
-        <FiEye />
+        <FiEye size={15} />
       </Link>
       <button
         type="button"
         onClick={() => setBookModal({ book })}
-        className="rounded-lg p-2 text-slate-500 transition hover:bg-amber-50 hover:text-amber-700"
-        title="এডিট"
+        className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+        title="Edit"
+        aria-label={`Edit ${book.title}`}
       >
-        <FiEdit2 />
+        <FiEdit2 size={15} />
       </button>
       <button
         type="button"
         onClick={() => setBookToDelete(book)}
-        className="rounded-lg p-2 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"
-        title="মুছুন"
+        className="rounded-lg p-1.5 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"
+        title="Delete"
+        aria-label={`Delete ${book.title}`}
       >
-        <FiTrash2 />
+        <FiTrash2 size={15} />
       </button>
     </div>
   );
@@ -714,27 +717,25 @@ export default function PublishersManagement() {
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-16">
       <PageHeader
-        title="Publishers Management (প্রকাশনী)"
-        description="প্রকাশনী ও প্রকাশনীভিত্তিক বইয়ের ক্যাটালগ ব্যবস্থাপনা।"
+        title="Publishers"
+        description="Manage publishers and their book catalogs."
       />
 
       {/* Overview */}
-      <div className="grid grid-cols-3 gap-2 sm:gap-4">
+      <div className="grid grid-cols-3 gap-3">
         {[
-          { label: 'প্রকাশনী', value: overall.publishers },
-          { label: 'মোট বই', value: overall.books },
-          { label: 'মোট স্টক', value: overall.stock.toLocaleString() },
+          { label: 'Publishers', value: overall.publishers },
+          { label: 'Books', value: overall.books },
+          { label: 'Total Stock', value: overall.stock.toLocaleString() },
         ].map(s => (
           <div
             key={s.label}
-            className="min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-3 sm:px-5 sm:py-4"
+            className="min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3.5"
           >
             <p className="truncate text-xs font-medium text-slate-500">
               {s.label}
             </p>
-            <p className="mt-1 text-xl font-bold text-slate-900 sm:text-2xl">
-              {s.value}
-            </p>
+            <p className="mt-1 text-xl font-bold text-slate-900">{s.value}</p>
           </div>
         ))}
       </div>
@@ -742,18 +743,18 @@ export default function PublishersManagement() {
       {/* Publishers list */}
       <section>
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="font-heading text-lg font-bold text-slate-900">
-            প্রকাশনী তালিকা
+          <h2 className="font-heading text-base font-bold text-slate-900">
+            All Publishers ({publishers.length})
           </h2>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
             <div className="relative w-full sm:w-60">
               <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="প্রকাশনী খুঁজুন..."
+                placeholder="Search publisher..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-8 text-sm text-slate-800 placeholder:text-slate-400 focus:border-primary focus:outline-none"
+                className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-8 text-xs text-slate-800 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none"
               />
               {searchQuery && (
                 <button
@@ -769,16 +770,16 @@ export default function PublishersManagement() {
             <button
               type="button"
               onClick={openAddPublisher}
-              className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-xs font-bold text-dark transition hover:bg-primary-hover"
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg bg-primary px-3.5 text-xs font-bold text-dark transition hover:bg-primary-hover"
             >
-              <FiPlus className="text-base" /> নতুন প্রকাশনী
+              <FiPlus size={14} /> Add Publisher
             </button>
           </div>
         </div>
 
         {filteredPublishers.length === 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white py-10 text-center text-sm text-slate-400">
-            কোনো প্রকাশনী পাওয়া যায়নি।
+            No publishers found.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -789,9 +790,9 @@ export default function PublishersManagement() {
                 <div
                   key={pub.id}
                   onClick={() => setSelectedPublisherId(pub.id)}
-                  className={`cursor-pointer rounded-xl border bg-white p-4 transition ${
+                  className={`cursor-pointer rounded-xl border bg-white p-3.5 transition ${
                     isSelected
-                      ? 'border-primary ring-2 ring-primary/30'
+                      ? 'border-slate-900'
                       : 'border-slate-200 hover:border-slate-300'
                   }`}
                 >
@@ -802,43 +803,28 @@ export default function PublishersManagement() {
                       onError={e => {
                         e.currentTarget.src = FALLBACK_COVER;
                       }}
-                      className="h-11 w-11 shrink-0 rounded-lg border border-slate-200 object-cover"
+                      className="h-10 w-10 shrink-0 rounded-lg border border-slate-200 object-cover"
                     />
                     <div className="min-w-0 flex-1">
-                      <h3 className="truncate font-heading text-sm font-bold text-slate-900">
+                      <h3 className="truncate font-heading text-sm font-semibold text-slate-900">
                         {pub.name}
                       </h3>
-                      <p className="truncate text-xs text-slate-500">
-                        {pub.nameEn || pub.code || 'প্রকাশক'}
+                      <p className="truncate text-xs text-slate-400">
+                        {stats.totalBooks} books
                       </p>
                     </div>
-                    <span
-                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${
-                        pub.status === 'inactive'
-                          ? 'bg-slate-300'
-                          : 'bg-emerald-500'
-                      }`}
-                      title={
-                        pub.status === 'inactive' ? 'নিষ্ক্রিয়' : 'সক্রিয়'
-                      }
-                    />
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
-                    <span className="text-xs text-slate-500">
-                      <strong className="text-slate-800">
-                        {stats.totalBooks}
-                      </strong>{' '}
-                      টি বই
-                    </span>
-                    <div className="flex items-center">
+                    <div
+                      className="flex items-center gap-0.5"
+                      onClick={e => e.stopPropagation()}
+                    >
                       <button
                         type="button"
                         onClick={e => openEditPublisher(pub, e)}
-                        className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                        title="সম্পাদনা"
+                        className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-800"
+                        title="Edit"
+                        aria-label={`Edit ${pub.name}`}
                       >
-                        <FiEdit2 className="text-sm" />
+                        <FiEdit2 size={14} />
                       </button>
                       {!pub.isPrimary && (
                         <button
@@ -847,10 +833,11 @@ export default function PublishersManagement() {
                             e.stopPropagation();
                             setPublisherToDelete(pub);
                           }}
-                          className="rounded-lg p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
-                          title="মুছুন"
+                          className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+                          title="Delete"
+                          aria-label={`Delete ${pub.name}`}
                         >
-                          <FiTrash2 className="text-sm" />
+                          <FiTrash2 size={14} />
                         </button>
                       )}
                     </div>
@@ -865,138 +852,105 @@ export default function PublishersManagement() {
       {/* Selected publisher */}
       {activePublisher && (
         <section className="space-y-4">
-          {/* Header */}
-          <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="flex min-w-0 items-start gap-3 sm:gap-4">
+          <div className="rounded-xl border border-slate-200 bg-white p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex min-w-0 items-center gap-3.5">
                 <img
                   src={activePublisher.logo || FALLBACK_COVER}
                   alt=""
                   onError={e => {
                     e.currentTarget.src = FALLBACK_COVER;
                   }}
-                  className="h-14 w-14 shrink-0 rounded-xl border border-slate-200 object-cover sm:h-16 sm:w-16"
+                  className="h-12 w-12 shrink-0 rounded-lg border border-slate-200 object-cover"
                 />
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="break-words font-heading text-xl font-bold text-slate-900 sm:text-2xl">
+                    <h2 className="font-heading text-lg font-bold text-slate-900">
                       {activePublisher.name}
                     </h2>
                     {activePublisher.code && (
-                      <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
-                        {activePublisher.code}
+                      <span className="text-xs text-slate-400">
+                        ({activePublisher.code})
                       </span>
                     )}
-                    <span
-                      className={`rounded-md px-2 py-0.5 text-xs font-semibold ${
-                        activePublisher.status === 'inactive'
-                          ? 'bg-slate-100 text-slate-500'
-                          : 'bg-emerald-50 text-emerald-700'
-                      }`}
-                    >
-                      {activePublisher.status === 'inactive'
-                        ? 'নিষ্ক্রিয়'
-                        : 'সক্রিয়'}
-                    </span>
                   </div>
-
-                  {activePublisher.description && (
-                    <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-slate-600">
-                      {activePublisher.description}
-                    </p>
-                  )}
-
-                  <p className="mt-2 break-words text-xs text-slate-500">
+                  <p className="mt-0.5 truncate text-xs text-slate-500">
                     {[
                       activePublisher.phone,
                       activePublisher.email,
                       activePublisher.address,
                     ]
                       .filter(Boolean)
-                      .join('  •  ')}
-                    {activePublisher.website && (
-                      <>
-                        {'  •  '}
-                        <a
-                          href={activePublisher.website}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-indigo-600 hover:underline"
-                        >
-                          ওয়েবসাইট
-                        </a>
-                      </>
-                    )}
+                      .join(' · ') || 'No contact details added'}
                   </p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 sm:flex sm:shrink-0">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setBookModal({ book: null })}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-dark transition hover:bg-primary-hover"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-dark transition hover:bg-primary-hover"
                 >
-                  <FiPlus className="text-base" /> বই যোগ করুন
+                  <FiPlus size={14} /> Add Book
                 </button>
                 <button
                   type="button"
                   onClick={e => openEditPublisher(activePublisher, e)}
-                  className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
                 >
-                  <FiEdit2 /> সম্পাদনা
+                  <FiEdit2 size={13} /> Edit
                 </button>
               </div>
             </div>
 
-            {/* Stats */}
-            <div className="mt-4 grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 pt-4 text-center">
-              <div className="min-w-0 px-1">
-                <p className="truncate text-xs text-slate-500">বই</p>
-                <p className="mt-0.5 text-base font-bold text-slate-900 sm:text-lg">
-                  {activeStats.totalBooks} টি
+            <div className="mt-4 grid grid-cols-3 divide-x divide-slate-100 border-t border-slate-100 pt-3.5 text-center">
+              <div className="px-2">
+                <p className="text-xs text-slate-500">Books</p>
+                <p className="mt-0.5 text-base font-bold text-slate-900">
+                  {activeStats.totalBooks}
                 </p>
               </div>
-              <div className="min-w-0 px-1">
-                <p className="truncate text-xs text-slate-500">স্টক</p>
-                <p className="mt-0.5 text-base font-bold text-slate-900 sm:text-lg">
-                  {activeStats.totalStock} কপি
+              <div className="px-2">
+                <p className="text-xs text-slate-500">Stock</p>
+                <p className="mt-0.5 text-base font-bold text-slate-900">
+                  {activeStats.totalStock}
                 </p>
               </div>
-              <div className="min-w-0 px-1">
-                <p className="truncate text-xs text-slate-500">স্টক মূল্য</p>
-                <p className="mt-0.5 break-words text-base font-bold text-emerald-700 sm:text-lg">
+              <div className="px-2">
+                <p className="text-xs text-slate-500">Stock Value</p>
+                <p className="mt-0.5 text-base font-bold text-slate-900">
                   {formatTaka(activeStats.totalValue)}
                 </p>
               </div>
             </div>
           </div>
 
-          {/* Books */}
+          {/* Books table */}
           <div className="rounded-xl border border-slate-200 bg-white">
-            <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
-              <h3 className="font-heading text-base font-bold text-slate-900 sm:text-lg">
-                {activePublisher.name}-এর বই ({activeBooks.length})
+            <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-3.5 lg:flex-row lg:items-center lg:justify-between">
+              <h3 className="font-heading text-sm font-bold text-slate-900">
+                Catalog ({activeBooks.length})
               </h3>
 
               {activeBooks.length > 0 && (
                 <div className="flex flex-col gap-2 sm:flex-row">
-                  <div className="relative sm:w-64">
+                  <div className="relative sm:w-56">
                     <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                     <input
                       type="text"
                       value={bookSearch}
                       onChange={e => setBookSearch(e.target.value)}
-                      placeholder="বই, লেখক বা ক্যাটাগরি..."
-                      className="h-10 w-full rounded-xl border border-slate-200 pl-9 pr-3 text-sm focus:border-primary focus:outline-none"
+                      placeholder="Search title, author..."
+                      className="h-9 w-full rounded-lg border border-slate-200 pl-9 pr-3 text-xs focus:border-slate-500 focus:outline-none"
                     />
                   </div>
                   <select
                     value={bookStatus}
                     onChange={e => setBookStatus(e.target.value)}
-                    className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:border-primary focus:outline-none"
+                    className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 focus:border-slate-500 focus:outline-none"
                   >
-                    <option value="all">সব স্ট্যাটাস</option>
+                    <option value="all">All Status</option>
                     <option value="published">Published</option>
                     <option value="pending">Pending</option>
                     <option value="draft">Draft</option>
@@ -1006,28 +960,26 @@ export default function PublishersManagement() {
             </div>
 
             {activeBooks.length === 0 ? (
-              <div className="px-4 py-14 text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-xl text-slate-400">
-                  <FiBookOpen />
-                </div>
-                <h4 className="font-heading text-base font-bold text-slate-800">
-                  এই প্রকাশনীর কোনো বই নেই
-                </h4>
+              <div className="px-4 py-12 text-center">
+                <FiBookOpen className="mx-auto mb-2 text-2xl text-slate-300" />
+                <p className="text-sm font-medium text-slate-600">
+                  No books under this publisher
+                </p>
                 <button
                   type="button"
                   onClick={() => setBookModal({ book: null })}
-                  className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-dark hover:bg-primary-hover"
+                  className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-dark hover:bg-primary-hover"
                 >
-                  <FiPlus /> প্রথম বই যোগ করুন
+                  <FiPlus size={14} /> Add Book
                 </button>
               </div>
             ) : visibleBooks.length === 0 ? (
-              <p className="py-12 text-center text-sm text-slate-400">
-                কোনো বই পাওয়া যায়নি।
+              <p className="py-10 text-center text-sm text-slate-400">
+                No matching books found.
               </p>
             ) : (
               <>
-                {/* Mobile: cards */}
+                {/* Mobile cards */}
                 <ul className="divide-y divide-slate-100 md:hidden">
                   {visibleBooks.map(book => {
                     const stock = Number(book.stock || 0);
@@ -1040,16 +992,16 @@ export default function PublishersManagement() {
                             onError={e => {
                               e.currentTarget.src = FALLBACK_COVER;
                             }}
-                            className="h-16 w-12 shrink-0 rounded-md border border-slate-200 object-cover"
+                            className="h-14 w-10 shrink-0 rounded-md border border-slate-200 object-cover"
                           />
                           <div className="min-w-0 flex-1">
-                            <p className="break-words font-semibold text-slate-900">
+                            <p className="truncate font-semibold text-slate-900">
                               {book.title}
                             </p>
                             <p className="truncate text-xs text-slate-500">
-                              {book.author} • {book.category || 'General'}
+                              {book.author} · {book.category || 'General'}
                             </p>
-                            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                            <div className="mt-1.5 flex items-center gap-3 text-xs">
                               <span className="font-semibold text-slate-900">
                                 {formatTaka(
                                   book.salePrice ||
@@ -1060,7 +1012,7 @@ export default function PublishersManagement() {
                               <span
                                 className={`font-semibold ${stockTone(stock)}`}
                               >
-                                স্টক: {stock}
+                                Stock: {stock}
                               </span>
                               <StatusBadge
                                 status={book.status || 'published'}
@@ -1076,18 +1028,22 @@ export default function PublishersManagement() {
                   })}
                 </ul>
 
-                {/* Tablet / desktop: table */}
+                {/* Desktop table */}
                 <div className="hidden overflow-x-auto md:block">
-                  <table className="w-full min-w-[720px] text-left text-sm">
-                    <thead className="bg-slate-50 text-xs font-semibold text-slate-500">
+                  <table className="w-full min-w-[700px] text-left text-sm">
+                    <thead className="border-b border-slate-200 bg-slate-50 text-xs font-medium text-slate-500">
                       <tr>
-                        <th className="px-6 py-3">বই</th>
-                        <th className="px-4 py-3">ক্যাটাগরি</th>
-                        <th className="px-4 py-3">মূল্য</th>
-                        <th className="px-4 py-3">বিক্রয় মূল্য</th>
-                        <th className="px-4 py-3">স্টক</th>
-                        <th className="px-4 py-3">স্ট্যাটাস</th>
-                        <th className="px-6 py-3 text-right">অ্যাকশন</th>
+                        <th className="whitespace-nowrap px-5 py-3">Book</th>
+                        <th className="whitespace-nowrap px-4 py-3">Category</th>
+                        <th className="whitespace-nowrap px-4 py-3">Price</th>
+                        <th className="whitespace-nowrap px-4 py-3">
+                          Sale Price
+                        </th>
+                        <th className="whitespace-nowrap px-4 py-3">Stock</th>
+                        <th className="whitespace-nowrap px-4 py-3">Status</th>
+                        <th className="whitespace-nowrap px-5 py-3 text-right">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
@@ -1095,8 +1051,8 @@ export default function PublishersManagement() {
                         const stock = Number(book.stock || 0);
                         const price = book.price || book.retailPrice;
                         return (
-                          <tr key={book.id} className="hover:bg-slate-50/60">
-                            <td className="px-6 py-3">
+                          <tr key={book.id} className="hover:bg-slate-50/50">
+                            <td className="px-5 py-3">
                               <div className="flex min-w-[200px] items-center gap-3">
                                 <img
                                   src={
@@ -1106,7 +1062,7 @@ export default function PublishersManagement() {
                                   onError={e => {
                                     e.currentTarget.src = FALLBACK_COVER;
                                   }}
-                                  className="h-12 w-9 shrink-0 rounded-md border border-slate-200 object-cover"
+                                  className="h-11 w-8 shrink-0 rounded border border-slate-200 object-cover"
                                 />
                                 <div className="min-w-0">
                                   <p className="truncate font-semibold text-slate-900">
@@ -1118,10 +1074,10 @@ export default function PublishersManagement() {
                                 </div>
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-slate-600">
+                            <td className="whitespace-nowrap px-4 py-3 text-xs text-slate-600">
                               {book.category || 'General'}
                             </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                            <td className="whitespace-nowrap px-4 py-3 text-slate-600">
                               {formatTaka(price)}
                             </td>
                             <td className="whitespace-nowrap px-4 py-3 font-semibold text-slate-900">
@@ -1134,17 +1090,15 @@ export default function PublishersManagement() {
                                 stock,
                               )}`}
                             >
-                              {stock} টি
+                              {stock}
                             </td>
                             <td className="px-4 py-3">
                               <StatusBadge
                                 status={book.status || 'published'}
                               />
                             </td>
-                            <td className="px-6 py-3">
-                              <div className="flex justify-end">
-                                <BookActions book={book} />
-                              </div>
+                            <td className="px-5 py-3">
+                              <BookActions book={book} />
                             </td>
                           </tr>
                         );
@@ -1180,18 +1134,18 @@ export default function PublishersManagement() {
 
       <ConfirmModal
         isOpen={Boolean(publisherToDelete)}
-        title="প্রকাশনী মুছে ফেলবেন?"
-        message={`আপনি কি নিশ্চিতভাবে "${publisherToDelete?.name}" প্রকাশনীটি মুছে ফেলতে চান?`}
-        confirmLabel="মুছে ফেলুন"
+        title="Delete Publisher?"
+        message={`Are you sure you want to delete "${publisherToDelete?.name}"?`}
+        confirmLabel="Delete"
         onConfirm={confirmDeletePublisher}
         onCancel={() => setPublisherToDelete(null)}
       />
 
       <ConfirmModal
         isOpen={Boolean(bookToDelete)}
-        title="বই মুছে ফেলবেন?"
-        message={`আপনি কি নিশ্চিতভাবে "${bookToDelete?.title}" বইটি মুছে ফেলতে চান?`}
-        confirmLabel="মুছে ফেলুন"
+        title="Delete Book?"
+        message={`Are you sure you want to delete "${bookToDelete?.title}"?`}
+        confirmLabel="Delete"
         onConfirm={confirmDeleteBook}
         onCancel={() => setBookToDelete(null)}
       />

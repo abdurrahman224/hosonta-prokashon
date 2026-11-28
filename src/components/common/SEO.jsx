@@ -1,7 +1,11 @@
 import { Helmet } from 'react-helmet-async'
 import { useLocation } from 'react-router-dom'
 import books from '../../data/books'
+import authors from '../../data/authors'
 import { useData } from '../../context/useData'
+import { findBookBySlugOrId, getBookPath } from '../../utils/bookSlug'
+import { findAuthorBySlugOrId, getAuthorPath } from '../../utils/authorSlug'
+import { getBookPricing } from '../../utils/bookHelpers'
 
 const routeMeta = {
   '/': ['হসন্ত প্রকাশন | বাংলা বইয়ের প্রকাশনী', 'হসন্ত প্রকাশনের নির্বাচিত বাংলা বই, লেখক ও প্রকাশনার গল্প।'],
@@ -18,14 +22,35 @@ function SEO({ title, description, noIndex = false, image, structuredData }) {
   const location = useLocation()
   const { getBookRatingStats, getBookReviews } = useData()
   const book = location.pathname.startsWith('/books/')
-    ? books.find((item) => String(item.id) === location.pathname.split('/')[2])
+    ? findBookBySlugOrId(location.pathname.split('/')[2], books)
+    : null
+  const author = location.pathname.startsWith('/authors/')
+    ? findAuthorBySlugOrId(location.pathname.split('/')[2], authors)
     : null
   const fallback = routeMeta[location.pathname] ?? ['হসন্ত প্রকাশন', 'হসন্ত প্রকাশন - বাংলা বই ও প্রকাশনার ঠিকানা।']
-  const pageTitle = title ?? (book ? `${book.title?.bn || book.title} | হসন্ত প্রকাশন` : fallback[0])
-  const pageDescription = description ?? (book ? (book.description?.bn || book.description) : fallback[1])
+  const pageTitle =
+    title ??
+    (book
+      ? `${book.title?.bn || book.title} | হসন্ত প্রকাশন`
+      : author
+        ? `${author.name?.bn || author.name} | হসন্ত প্রকাশন`
+        : fallback[0])
+  const pageDescription =
+    description ??
+    (book
+      ? (book.description?.bn || book.description)
+      : author
+        ? (author.bio?.bn || author.bio)
+        : fallback[1])
   const bookStats = book ? getBookRatingStats(book.id) : null
   const bookReviews = book ? getBookReviews(book.id).slice(0, 5) : []
-  const canonical = `${window.location.origin}${location.pathname}`
+  const canonical = `${window.location.origin}${
+    book
+      ? getBookPath(book, books)
+      : author
+        ? getAuthorPath(author, authors)
+        : location.pathname
+  }`
   const privateRoute = ['/checkout', '/login', '/register'].includes(location.pathname) || location.pathname.startsWith('/dashboard')
   const jsonLd = structuredData ?? (
     book
@@ -36,7 +61,7 @@ function SEO({ title, description, noIndex = false, image, structuredData }) {
           author: { '@type': 'Person', name: book.author?.bn || book.author },
           image: book.cover,
           description: book.description?.bn || book.description,
-          offers: { '@type': 'Offer', priceCurrency: 'BDT', price: String(book.price).replace(/[^\d.]/g, ''), availability: 'https://schema.org/InStock' },
+          offers: { '@type': 'Offer', priceCurrency: 'BDT', price: String(getBookPricing(book).sellingPrice), availability: 'https://schema.org/InStock' },
           ...(bookStats?.total > 0 ? {
             aggregateRating: {
               '@type': 'AggregateRating',

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import useFormat from '../../hooks/useFormat';
+import { getAuthorPath } from '../../utils/authorSlug';
 
 function AuthorCard({ author }) {
   const { formatNumber } = useFormat();
@@ -13,7 +14,7 @@ function AuthorCard({ author }) {
       className="group h-full rounded-xl border border-dark/10 bg-white shadow-sm transition-shadow duration-300 hover:shadow-lg"
     >
       <Link
-        to={`/authors/${author.id}`}
+        to={getAuthorPath(author)}
         className="flex h-full flex-col items-center px-3 py-5 text-center sm:px-4 sm:py-6"
       >
         <img

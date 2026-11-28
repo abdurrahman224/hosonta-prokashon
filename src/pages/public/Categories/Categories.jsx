@@ -2,18 +2,11 @@ import { FiBookOpen } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 import books from '../../../data/books';
 import categoryNames from '../../../data/categoryNames';
-
-const toText = value =>
-  (value && typeof value === 'object'
-    ? Object.values(value).join(' ')
-    : String(value ?? '')
-  ).toLowerCase();
+import { bookHasCategory } from '../../../utils/bookHelpers';
 
 function Categories() {
   const items = categoryNames.map(name => {
-    const count = books.filter(book =>
-      toText(book.category).includes(name.toLowerCase()),
-    ).length;
+    const count = books.filter(book => bookHasCategory(book, name)).length;
 
     return {
       name,

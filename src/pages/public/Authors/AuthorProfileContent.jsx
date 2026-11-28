@@ -10,14 +10,7 @@ import {
   FilterPanel,
 } from '../../../components/filters/FilterComponents';
 import { buildActiveChips } from '../../../components/filters/FilterUtils';
-
-const toNumber = value => {
-  const bengaliDigits = '০১২৩৪৫৬৭৮৯';
-  const englishValue = String(value).replace(/[০-৯]/g, digit =>
-    bengaliDigits.indexOf(digit).toString(),
-  );
-  return Number(englishValue.replace(/[^\d]/g, '')) || 0;
-};
+import { getBookPricing } from '../../../utils/bookHelpers';
 
 function AuthorProfileContent({ author, books: authorBooks }) {
   const { formatNumber } = useFormat();
@@ -30,7 +23,7 @@ function AuthorProfileContent({ author, books: authorBooks }) {
   });
 
   const priceMax = useMemo(() => {
-    const max = Math.max(0, ...authorBooks.map(book => toNumber(book.price)));
+    const max = Math.max(0, ...authorBooks.map(book => getBookPricing(book).sellingPrice));
     return (Math.ceil(max / 100) * 100) || 100;
   }, [authorBooks]);
 
@@ -94,7 +87,7 @@ function AuthorProfileContent({ author, books: authorBooks }) {
 
   const visibleBooks = useMemo(() => {
     const filtered = authorBooks.filter(book => {
-      const price = toNumber(book.price);
+      const price = getBookPricing(book).sellingPrice;
       if (price < priceRange[0] || price > priceRange[1]) return false;
       if (filters.category && book.categoryId !== filters.category) return false;
       if (filters.author && String(book.authorId) !== String(filters.author)) return false;
@@ -109,12 +102,10 @@ function AuthorProfileContent({ author, books: authorBooks }) {
         );
       }
       if (sort === 'price-low') {
-        return Number(String(first.price).replace(/[^\d]/g, '')) -
-          Number(String(second.price).replace(/[^\d]/g, ''));
+        return getBookPricing(first).sellingPrice - getBookPricing(second).sellingPrice;
       }
       if (sort === 'price-high') {
-        return Number(String(second.price).replace(/[^\d]/g, '')) -
-          Number(String(first.price).replace(/[^\d]/g, ''));
+        return getBookPricing(second).sellingPrice - getBookPricing(first).sellingPrice;
       }
       return Number(second.id) - Number(first.id);
     });

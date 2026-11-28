@@ -64,7 +64,7 @@ function HeadlineTicker() {
 
   return (
     <div className="flex items-stretch overflow-hidden rounded-md bg-slate-950 text-white">
-      <div className="z-10 flex shrink-0 items-center bg-red-600 px-3 text-xs font-semibold md:px-5 md:text-base">
+      <div className="z-10 flex shrink-0 items-center bg-[#FDB82E] px-3 text-xs font-semibold md:px-5 md:text-base">
         আমাদের পার্টনার
       </div>
 
@@ -78,7 +78,7 @@ function HeadlineTicker() {
               tabIndex={i >= partners.length ? -1 : 0}
               className="flex items-center gap-3 whitespace-nowrap px-5 py-3 text-xs hover:text-red-300 md:text-base"
             >
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+              <span className="h-1.5 w-1.5 rounded-full bg-[#FDB82E]" />
               <span className="font-medium">{item.name}</span>
               <span className="text-slate-400">{item.tagline}</span>
             </a>
@@ -97,7 +97,7 @@ function PartnerCard({ item, hidden }) {
       href={item.url}
       aria-hidden={hidden}
       tabIndex={hidden ? -1 : 0}
-      className="group mr-3 flex w-56 shrink-0 items-center gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200 transition hover:ring-red-400 md:mr-5 md:w-72 md:gap-4 md:p-4"
+      className="group mr-3 flex w-56 shrink-0 items-center gap-3 rounded-xl bg-white p-3 ring-1 ring-slate-200 transition hover:ring-[#FDB82E] md:mr-5 md:w-72 md:gap-4 md:p-4 my-0.5"
     >
       <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 md:h-16 md:w-16">
         {item.logo ? (
@@ -123,7 +123,7 @@ function PartnerCard({ item, hidden }) {
         </span>
       </span>
 
-      <FiExternalLink className="shrink-0 text-slate-400 transition group-hover:text-red-600" />
+      <FiExternalLink className="shrink-0 text-slate-400 transition group-hover:text-[#FDB82E]" />
     </a>
   );
 }
@@ -156,10 +156,10 @@ function PartnersPage() {
 
       <div className="mx-auto max-w-7xl space-y-5 md:space-y-8">
         <header>
-          <h1 className="font-heading text-xl font-semibold text-slate-950 md:text-3xl">
+          <h1 className="font-heading text-xl font-semibold text-slate-950 md:text-xl">
             আমাদের পার্টনার
           </h1>
-          <p className="mt-1 text-xs text-slate-600 md:text-base">
+          <p className="mt-1 text-xs text-slate-600 md:text-sm">
             যাঁদের সাথে কাজ করে আমরা বই পৌঁছে দিই পাঠকের হাতে।
           </p>
         </header>

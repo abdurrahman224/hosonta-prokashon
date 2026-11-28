@@ -52,10 +52,10 @@ function TestimonialsSection() {
     <section className="bg-cream py-8 md:py-12">
       <div className="mx-auto max-w-7xl">
         <div className="px-5 md:px-8">
-          <h2 className="font-heading text-xl font-bold text-dark md:text-2xl">
+          <h2 className="font-heading text-xl font-bold text-dark md:text-xl">
             পাঠকের ভালোবাসা
           </h2>
-          <p className="mt-1 text-sm text-dark-muted">
+          <p className="mt-1 text-xs  md:text-sm text-dark-muted">
             যাঁরা আমাদের সঙ্গে আছেন, তাঁদের কিছু কথা।
           </p>
         </div>

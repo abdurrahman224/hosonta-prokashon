@@ -66,7 +66,7 @@ function BookSection({ title, to, select }) {
           </Link>
         </div>
 
-        <div className="relative mt-3.5 group">
+        <div className="relative mt-3.5">
           {canScrollLeft && (
             <button
               type="button"

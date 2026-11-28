@@ -26,7 +26,7 @@ export function OptionList({
   value,
   onChange,
   searchableAfter = 8,
-  searchPlaceholder = 'খুঁজুন...',
+  searchPlaceholder = 'Search...',
   maxHeightClass = 'max-h-56',
 }) {
   const { formatNumber } = useFormat();
@@ -52,7 +52,7 @@ export function OptionList({
       )}
       <ul role="radiogroup" className={`${maxHeightClass} overflow-y-auto [scrollbar-width:thin]`}>
         {shown.length === 0 && (
-          <li className="px-4 py-3 text-sm text-dark-muted">কিছু পাওয়া যায়নি</li>
+          <li className="px-4 py-3 text-sm text-dark-muted">No results found</li>
         )}
         {shown.map(option => {
           const selected = value === option.id;
@@ -132,7 +132,7 @@ export function PriceRange({ min, max, value, onCommit, step }) {
         />
         <input
           type="range"
-          aria-label="সর্বনিম্ন মান"
+          aria-label="Minimum value"
           min={min}
           max={max}
           step={stepSize}
@@ -144,7 +144,7 @@ export function PriceRange({ min, max, value, onCommit, step }) {
         />
         <input
           type="range"
-          aria-label="সর্বোচ্চ মান"
+          aria-label="Maximum value"
           min={min}
           max={max}
           step={stepSize}
@@ -158,8 +158,8 @@ export function PriceRange({ min, max, value, onCommit, step }) {
 
       <div className="mt-4 grid grid-cols-2 gap-2 text-dark">
         {[
-          ['সর্বনিম্ন', from, number => setRange([clampNumber(number, min, to), to])],
-          ['সর্বোচ্চ', to, number => setRange([from, clampNumber(number, from, max)])],
+          ['Min', from, number => setRange([clampNumber(number, min, to), to])],
+          ['Max', to, number => setRange([from, clampNumber(number, from, max)])],
         ].map(([label, number, setter]) => (
           <label key={label} className="block">
             <input
@@ -221,10 +221,10 @@ export function FilterPanel({ sections, values, onChange }) {
 export function FilterDrawer({
   open,
   onClose,
-  title = 'ফিল্টার',
+  title = 'Filters',
   activeCount = 0,
   onReset,
-  resultLabel = 'ফলাফল দেখুন',
+  resultLabel = 'View results',
   children,
 }) {
   useEffect(() => {
@@ -243,15 +243,15 @@ export function FilterDrawer({
 
   return (
     <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-label={title}>
-      <button type="button" aria-label="বন্ধ করুন" onClick={onClose} className="absolute inset-0 bg-dark/60" />
+      <button type="button" aria-label="Close" onClick={onClose} className="absolute inset-0 bg-dark/60" />
       <div className="absolute inset-x-0 bottom-0 flex max-h-[88vh] flex-col rounded-t-2xl bg-cream shadow-2xl">
         <div className="flex items-center justify-between border-b border-dark/10 px-4 py-3">
           <p className="font-heading font-semibold text-dark">{title}</p>
           <div className="flex items-center gap-3">
             {activeCount > 0 && onReset && (
-              <button type="button" onClick={onReset} className="text-sm font-semibold text-primary-hover">সব মুছুন</button>
+              <button type="button" onClick={onReset} className="text-sm font-semibold text-primary-hover">Clear all</button>
             )}
-            <button type="button" onClick={onClose} aria-label="বন্ধ করুন" className="rounded-full p-1.5 text-dark hover:bg-dark/5">
+            <button type="button" onClick={onClose} aria-label="Close" className="rounded-full p-1.5 text-dark hover:bg-dark/5">
               <FiX />
             </button>
           </div>
@@ -267,7 +267,7 @@ export function FilterDrawer({
   );
 }
 
-export function FilterButton({ onClick, activeCount = 0, label = 'ফিল্টার', className = '' }) {
+export function FilterButton({ onClick, activeCount = 0, label = 'Filters', className = '' }) {
   const { formatNumber } = useFormat();
 
   return (
@@ -296,7 +296,7 @@ export function ActiveFilterChips({ chips, onRemove }) {
       className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-white px-3 py-1 text-xs font-medium text-dark ring-1 ring-dark/10 transition hover:ring-primary"
     >
       <span className="truncate">{chip.label}</span>
-      <FiX className="shrink-0" aria-label="মুছুন" />
+      <FiX className="shrink-0" aria-label="Remove" />
     </button>
   ));
 }

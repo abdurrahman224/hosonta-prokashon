@@ -21,6 +21,7 @@ import {
   getShipping,
   resolveItem,
 } from '../../../utils/orderUtils'
+import { getBookPath } from '../../../utils/bookSlug'
 
 const COMPANY = {
   name: 'হসন্ত প্রকাশন',
@@ -156,7 +157,7 @@ function MyOrderDetails() {
               <article key={`${order.id}-${item.bookId}`} className="flex items-center gap-3 py-4 sm:gap-4">
                 {item.image ? <img src={item.image} alt="" className="h-16 w-14 shrink-0 rounded-md border border-dark/10 object-cover sm:h-20 sm:w-16" /> : <span className="flex h-16 w-14 shrink-0 items-center justify-center rounded-md border border-dark/10 bg-cream sm:h-20 sm:w-16"><FiPackage /></span>}
                 <div className="min-w-0 flex-1">
-                  <Link to={`/books/${item.bookId}`} className="line-clamp-1 text-sm font-semibold text-dark hover:text-primary-hover sm:text-base">{item.title}</Link>
+                  <Link to={getBookPath({ id: item.bookId, title: item.title })} className="line-clamp-1 text-sm font-semibold text-dark hover:text-primary-hover sm:text-base">{item.title}</Link>
                   {item.author && <p className="mt-1 text-[11px] text-dark-muted sm:text-xs">Author: {typeof item.author === 'object' ? item.author.bn || item.author.name : item.author}</p>}
                   {order.status === 'delivered' && <button type="button" onClick={() => setReviewing(item)} className="mt-1 text-[11px] font-semibold text-primary-hover sm:text-xs">Write Review</button>}
                 </div>

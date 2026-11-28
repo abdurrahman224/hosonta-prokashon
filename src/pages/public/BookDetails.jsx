@@ -10,9 +10,18 @@ import {
   FiX,
 } from 'react-icons/fi';
 import toast from 'react-hot-toast';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import BookRow from '../../components/books/BookRow';
 import books from '../../data/books';
+import authors from '../../data/authors';
+import { findBookBySlugOrId, getBookPath } from '../../utils/bookSlug';
+import { getAuthorPath } from '../../utils/authorSlug';
+import {
+  bookHasCategory,
+  getBookCategories,
+  getBookPricing,
+} from '../../utils/bookHelpers';
+import BookPdfModal from '../../components/books/BookPdfModal';
 import { useCart } from '../../context/useCart';
 import { useWishlist } from '../../context/useWishlist';
 import { useData } from '../../context/useData';
@@ -38,26 +47,83 @@ const bookMetadata = {
   12: { isbn: '978-984-9851-12-7', pages: '১৭৬' },
 };
 
+const TYPING_PROMPT = 'বইটি একটু পড়ুন';
+
+function TypingReadPrompt({ onClick }) {
+  const [charCount, setCharCount] = useState(TYPING_PROMPT.length);
+
+  useEffect(() => {
+    let index = 0;
+    let pausing = false;
+    const interval = window.setInterval(() => {
+      if (pausing) return;
+      index += 1;
+      if (index > TYPING_PROMPT.length) {
+        pausing = true;
+        window.setTimeout(() => {
+          index = 0;
+          pausing = false;
+          setCharCount(0);
+        }, 1600);
+        return;
+      }
+      setCharCount(index);
+    }, 95);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="mb-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-primary/40 bg-white px-3.5 py-2 text-xs font-bold text-dark shadow-2xs transition hover:border-primary hover:bg-primary/15 sm:text-sm"
+    >
+      <FiBookOpen className="shrink-0 text-primary-hover" />
+      <span className="min-h-[1.25rem]">
+        {TYPING_PROMPT.slice(0, charCount)}
+        <span className="ml-0.5 inline-block h-3.5 w-[2px] animate-pulse bg-primary-hover align-middle" />
+      </span>
+    </button>
+  );
+}
+
 function BookDetails() {
-  const { id } = useParams();
+  const { slug } = useParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [quantity, setQuantity] = useState(1);
   const [isReviewLoading, setIsReviewLoading] = useState(true);
   const [editingReview, setEditingReview] = useState(null);
   const [selectedRating, setSelectedRating] = useState(0);
   const [isReviewFormOpen, setIsReviewFormOpen] = useState(false);
+  const [isPdfOpen, setIsPdfOpen] = useState(
+    () => new URLSearchParams(location.search).get('read') === '1',
+  );
   const { books: stockedBooks, reviews, getBookRatingStats } = useData();
   const { currentUser, can } = useAuth();
   const { addToCart } = useCart();
   const { formatCurrency, formatNumber } = useFormat();
   const { isInWishlist, toggleWishlist } = useWishlist();
-  const book = books.find(
-    item => String(item.id) === id && item.status === 'published',
-  );
+  const catalogBooks = stockedBooks.length ? stockedBooks : books;
+  const publishedBooks = catalogBooks.filter(item => item.status === 'published');
+  const book = findBookBySlugOrId(slug, publishedBooks);
+  const canonicalPath = book ? getBookPath(book, catalogBooks) : '';
 
   useEffect(() => {
     const timer = window.setTimeout(() => setIsReviewLoading(false), 240);
     return () => window.clearTimeout(timer);
-  }, [id]);
+  }, [slug]);
+
+  useEffect(() => {
+    if (
+      book &&
+      slug &&
+      String(book.id) === slug &&
+      canonicalPath !== `/books/${slug}`
+    ) {
+      navigate(`${canonicalPath}${location.hash || ''}`, { replace: true });
+    }
+  }, [book, slug, canonicalPath, location.hash, navigate]);
 
   if (!book) {
     return <BookNotFound />;
@@ -90,12 +156,15 @@ function BookDetails() {
         item.status === 'published',
     )
     .slice(0, 6);
+  const bookCategories = getBookCategories(stockedBook);
+  const { originalPrice, sellingPrice, discountPercent, hasDiscount } =
+    getBookPricing(stockedBook);
   const relatedBooks = books
     .filter(
       item =>
-        item.categoryId === book.categoryId &&
         item.id !== book.id &&
-        item.status === 'published',
+        item.status === 'published' &&
+        bookCategories.some(cat => bookHasCategory(item, cat)),
     )
     .slice(0, 6);
 
@@ -137,9 +206,9 @@ function BookDetails() {
 
   return (
     <div className="bg-cream">
-      <main className="mx-auto max-w-6xl px-4 py-4 md:px-8 md:py-12">
+      <main className="mx-auto max-w-6xl px-4 py-4 md:px-8 md:py-10">
         <nav
-          className="flex flex-wrap items-center gap-2 text-sm text-dark-muted"
+          className="flex flex-wrap items-center gap-1.5 text-xs text-dark-muted sm:gap-2 sm:text-sm"
           aria-label="ব্রেডক্রাম্ব"
         >
           <Link to="/" className="transition hover:text-primary-hover">
@@ -150,58 +219,84 @@ function BookDetails() {
             বই
           </Link>
           <span>/</span>
-          <span className="max-w-[14rem] truncate text-dark">
+          <span className="max-w-[13rem] truncate font-medium text-dark sm:max-w-[18rem]">
             {book.title?.bn || book.title}
           </span>
         </nav>
 
-        <section className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-6">
-          <div className="mx-auto w-full max-w-md">
-            <div className="h-full  w-full overflow-hidden rounded-md bg-dark-gray shadow-xl">
+        <section className="mt-4 grid gap-5 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1.25fr)] lg:items-start lg:gap-8">
+          <div className="mx-auto w-full max-w-[230px] sm:max-w-[270px] lg:max-w-[310px]">
+            <TypingReadPrompt onClick={() => setIsPdfOpen(true)} />
+            <div
+              onClick={() => setIsPdfOpen(true)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setIsPdfOpen(true);
+                }
+              }}
+              aria-label="বইটি একটু পড়ুন প্রিভিউ খুলুন"
+              className="group relative aspect-[3/4] w-full cursor-pointer overflow-hidden rounded-lg border border-dark/10 bg-dark-gray shadow-lg"
+            >
               <img
                 src={book.cover}
                 alt={book.title?.bn || book.title}
-                className=" h-full w-full object-cover"
+                className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
               />
+              {hasDiscount && (
+                <span className="absolute right-2.5 top-2.5 rounded-full bg-red-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-md sm:px-3 sm:text-xs">
+                  {formatNumber(discountPercent)}% ডিসকাউন্ট
+                </span>
+              )}
             </div>
           </div>
 
           <div className="flex flex-col">
-            <h1 className="font-heading text-base font-bold leading-tight text-dark md:text-xl">
+            <h1 className="font-heading text-lg font-bold leading-snug text-dark sm:text-xl md:text-2xl">
               {book.title?.bn || book.title}
             </h1>
-            <p className="mt-1 text-sm text-dark-muted">
+            <p className="mt-1 text-xs text-dark-muted sm:text-sm">
               লেখক:{' '}
               <Link
-                to={`/authors/${book.authorId}`}
-                className="font-semibold text-sm text-dark  transition hover:text-primary-hover"
+                to={getAuthorPath({ id: book.authorId, name: book.author?.bn || book.author }, authors)}
+                className="font-semibold text-dark transition hover:text-primary-hover"
               >
                 {book.author?.bn || book.author}
               </Link>
             </p>
-            <span className="mt-2 w-fit rounded-full bg-primary px-4 py-1.5 text-sm font-semibold text-dark">
-              {book.category?.bn || book.category}
-            </span>
+            <div className="mt-2.5 flex flex-wrap gap-1.5">
+              {bookCategories.map(cat => (
+                <Link
+                  key={cat}
+                  to={`/categories/${encodeURIComponent(cat)}`}
+                  className="w-fit rounded-full border border-primary/40 bg-primary/15 px-3 py-1 text-xs font-semibold text-dark transition hover:border-primary hover:bg-primary"
+                >
+                  {cat}
+                </Link>
+              ))}
+            </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-3 ">
+            <div className="mt-3 flex flex-wrap items-center gap-2.5">
               {ratingStats.total > 0 ? (
                 <>
-                  <span className="font-heading text-xl font-bold text-dark">
+                  <span className="font-heading text-base font-bold text-dark sm:text-lg">
                     {formatNumber(ratingStats.average.toFixed(1))}
                   </span>
                   <StarRating value={ratingStats.average} />
-                  <span className="text-sm text-dark-muted">
+                  <span className="text-xs text-dark-muted sm:text-sm">
                     ({ratingStats.total}টি রিভিউ)
                   </span>
                 </>
               ) : (
-                <span className="text-sm text-dark-muted">
+                <span className="text-xs text-dark-muted sm:text-sm">
                   এখনো কোনো রেটিং নেই
                 </span>
               )}
             </div>
 
-            <dl className="mt-2 grid max-w-xl grid-cols-2 gap-4 border-y border-dark/10 py-2 sm:grid-cols-3">
+            <dl className="mt-3 grid max-w-md grid-cols-2 gap-4 border-y border-dark/10 py-2.5">
               <BookMeta label="প্রকাশের বছর" value={book.publishedYear} />
               {/* <BookMeta label="ISBN" value={metadata.isbn} /> */}
               <BookMeta
@@ -210,70 +305,98 @@ function BookDetails() {
               />
             </dl>
 
-            <p className="mt-2 font-heading text-2xl font-bold text-primary-hover">
-              {formatCurrency(book.price)}
-            </p>
-            <p className=" max-w-2xl text-sm leading-8 text-dark-muted">
+            <div className="mt-3 flex flex-wrap items-baseline gap-2.5">
+              <p className="font-heading text-xl font-bold text-dark sm:text-2xl">
+                {formatCurrency(sellingPrice)}
+              </p>
+              {hasDiscount && (
+                <>
+                  <span className="text-sm font-medium text-dark-muted line-through">
+                    {formatCurrency(originalPrice)}
+                  </span>
+                  <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-[11px] font-bold text-white">
+                    {formatNumber(discountPercent)}% ডিসকাউন্ট
+                  </span>
+                </>
+              )}
+            </div>
+            <p className="mt-2.5 max-w-2xl text-[13.5px] leading-7 text-dark-muted sm:text-sm">
               {book.description?.bn || book.description}
             </p>
 
-            <div className="mt-2 flex flex-wrap items-center gap-3">
-              <div className="hidden md:flex items-center rounded-md border border-dark/10 bg-white">
+            <div className="mt-4 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:items-center">
+              <div className="flex items-center justify-between gap-2 sm:contents">
+                <div className="flex items-center rounded-lg border border-dark/15 bg-white">
+                  <button
+                    type="button"
+                    disabled={quantity <= 1}
+                    onClick={() => setQuantity(value => value - 1)}
+                    className="flex h-10 w-9 items-center justify-center text-dark disabled:opacity-30 sm:h-11 sm:w-10"
+                    aria-label="সংখ্যা কমান"
+                  >
+                    <FiMinus size={14} />
+                  </button>
+                  <span className="min-w-8 text-center text-sm font-semibold">
+                    {quantity}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={outOfStock || quantity >= stockedBook.stock}
+                    onClick={() => setQuantity(value => value + 1)}
+                    className="flex h-10 w-9 items-center justify-center text-dark disabled:opacity-30 sm:h-11 sm:w-10"
+                    aria-label="সংখ্যা বাড়ান"
+                  >
+                    <FiPlus size={14} />
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2 sm:order-4">
+                  <button
+                    type="button"
+                    onClick={handleShare}
+                    className="flex h-10 w-10 items-center justify-center rounded-lg border border-dark/15 bg-white text-dark transition hover:border-primary hover:bg-primary/10 sm:h-11 sm:w-11"
+                    aria-label="শেয়ার করুন"
+                  >
+                    <FiShare2 size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleWishlist}
+                    className={`flex h-10 w-10 items-center justify-center rounded-lg border bg-white transition hover:border-primary sm:h-11 sm:w-11 ${isInWishlist(book.id) ? 'border-red-200 text-red-500' : 'border-dark/15 text-dark'}`}
+                    aria-label="উইশলিস্টে যোগ করুন"
+                  >
+                    <FiHeart
+                      size={15}
+                      className={isInWishlist(book.id) ? 'fill-current' : ''}
+                    />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 sm:order-2 sm:flex sm:items-center">
                 <button
                   type="button"
-                  disabled={quantity <= 1}
-                  onClick={() => setQuantity(value => value - 1)}
-                  className="p-3 text-dark disabled:opacity-30"
-                  aria-label="সংখ্যা কমান"
+                  onClick={handleCart}
+                  disabled={outOfStock}
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 text-xs font-bold text-dark shadow-xs transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:bg-dark/15 disabled:text-dark-muted sm:px-6 sm:text-sm"
                 >
-                  <FiMinus />
+                  <FiShoppingBag /> {outOfStock ? 'স্টকে নেই' : 'কার্টে যোগ করুন'}
                 </button>
-                <span className="min-w-10 text-center font-semibold">
-                  {quantity}
-                </span>
                 <button
                   type="button"
-                  disabled={outOfStock || quantity >= stockedBook.stock}
-                  onClick={() => setQuantity(value => value + 1)}
-                  className="p-3 text-dark disabled:opacity-30"
-                  aria-label="সংখ্যা বাড়ান"
+                  onClick={() => setIsPdfOpen(true)}
+                  className="inline-flex h-11 items-center justify-center gap-1.5 rounded-lg bg-dark px-4 text-xs font-semibold text-white transition hover:bg-dark-gray sm:px-5 sm:text-sm"
                 >
-                  <FiPlus />
+                  <FiBookOpen /> একটু পড়ুন
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={handleCart}
-                disabled={outOfStock}
-                className="inline-flex items-center gap-2 rounded-md bg-dark px-6 py-3.5 font-semibold text-white transition hover:bg-dark-gray disabled:cursor-not-allowed disabled:bg-dark/30"
-              >
-                <FiShoppingBag /> {outOfStock ? 'স্টকে নেই' : 'কার্টে যোগ করুন'}
-              </button>
-              <button
-                type="button"
-                onClick={handleShare}
-                className="rounded-md border border-dark/10 p-3 text-dark transition hover:scale-105"
-                aria-label="শেয়ার করুন"
-              >
-                <FiShare2 />
-              </button>
-              <button
-                type="button"
-                onClick={handleWishlist}
-                className={`rounded-md border p-3 transition hover:scale-105 ${isInWishlist(book.id) ? 'border-red-200 text-red-500' : 'border-dark/10 text-dark'}`}
-                aria-label="উইশলিস্টে যোগ করুন"
-              >
-                <FiHeart
-                  className={isInWishlist(book.id) ? 'fill-current' : ''}
-                />
-              </button>
             </div>
           </div>
         </section>
 
-        <section className="  pt-6" id="reviews">
+        <section className="pt-6" id="reviews">
           <div className="flex items-center justify-between gap-4">
-            <h2 className="font-heading text-xl font-bold text-dark">
+            <h2 className="font-heading text-base font-bold text-dark sm:text-lg">
               পাঠকের রিভিউ
             </h2>
             {ownReview?.status === 'pending' && (
@@ -389,6 +512,12 @@ function BookDetails() {
           </div>
         </div>
       )}
+      {isPdfOpen && (
+        <BookPdfModal
+          book={stockedBook}
+          onClose={() => setIsPdfOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -398,8 +527,8 @@ function BookDetails() {
 function BookMeta({ label, value }) {
   return (
     <div>
-      <dt className="text-sm text-dark-muted">{label}</dt>
-      <dd className="mt-1 font-semibold text-dark">{value}</dd>
+      <dt className="text-xs text-dark-muted">{label}</dt>
+      <dd className="mt-0.5 text-sm font-semibold text-dark">{value}</dd>
     </div>
   );
 }

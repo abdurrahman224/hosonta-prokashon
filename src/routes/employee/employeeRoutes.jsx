@@ -28,6 +28,12 @@ const BookDetailsDashboard = lazy(
 const PublishersManagement = lazy(
   () => import('../../pages/dashboard/admin/PublishersManagement'),
 );
+const EmployeeProfile = lazy(
+  () => import('../../pages/dashboard/employee/EmployeeProfile'),
+);
+const ExpenseProfiles = lazy(
+  () => import('../../pages/dashboard/common/ExpenseProfiles'),
+);
 
 export const employeeRoutes = (
   <>
@@ -132,6 +138,30 @@ export const employeeRoutes = (
       element={
         <ProtectedRoute allowedRoles={['admin', 'employee']}>
           <CustomerMessages />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/dashboard/employee-profile"
+      element={
+        <ProtectedRoute allowedRoles={['admin', 'employee']}>
+          <EmployeeProfile />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/dashboard/expense-profiles"
+      element={
+        <ProtectedRoute allowedRoles={['admin', 'employee']}>
+          <ExpenseProfiles />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/dashboard/expense-profiles/:profileSlug"
+      element={
+        <ProtectedRoute allowedRoles={['admin', 'employee']}>
+          <ExpenseProfiles />
         </ProtectedRoute>
       }
     />

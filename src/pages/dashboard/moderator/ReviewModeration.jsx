@@ -1,261 +1,503 @@
-import { useMemo, useState } from 'react'
-import toast from 'react-hot-toast'
-import DataTable from '../../../components/dashboard/DataTable'
-import PageHeader from '../../../components/dashboard/PageHeader'
-import StatusBadge from '../../../components/dashboard/StatusBadge'
-import StarRating from '../../../components/reviews/StarRating'
-import { useAuth } from '../../../context/useAuth'
-import { useData } from '../../../context/useData'
-import books from '../../../data/books'
-import { PERMISSIONS } from '../../../utils/roles'
+import { useMemo, useState } from 'react';
+import {
+  FiCheck,
+  FiClock,
+  FiEye,
+  FiTrash2,
+  FiX,
+} from 'react-icons/fi';
+import toast from 'react-hot-toast';
+import StarRating from '../../../components/reviews/StarRating';
+import ConfirmModal from '../../../components/dashboard/ConfirmModal';
+import DataTable from '../../../components/dashboard/DataTable';
+import PageHeader from '../../../components/dashboard/PageHeader';
+import StatusBadge from '../../../components/dashboard/StatusBadge';
+import { useAuth } from '../../../context/useAuth';
+import { useData } from '../../../context/useData';
+import { PERMISSIONS } from '../../../utils/roles';
 
-const tabs = [
+const TABS = [
   ['pending', 'Pending'],
-  ['reported', 'Reported'],
   ['approved', 'Approved'],
-  ['closed', 'Closed'],
-]
+  ['reported', 'Reported'],
+  ['all', 'All'],
+];
 
 function ReviewModeration() {
-  const { currentUser, can } = useAuth()
-  const { reviews, updateReview, deleteReview } = useData()
-  const [activeTab, setActiveTab] = useState('pending')
-  const [selected, setSelected] = useState([])
-  const [detail, setDetail] = useState(null)
-  const [moderatorNote, setModeratorNote] = useState('')
-  const sortMode = 'new'
+  const { currentUser, can } = useAuth();
+  const { reviews, books = [], updateReview, deleteReview } = useData();
+  const [tab, setTab] = useState('pending');
+  const [selected, setSelected] = useState([]);
+  const [detail, setDetail] = useState(null);
+  const [moderatorNote, setModeratorNote] = useState('');
+  const [reviewToDelete, setReviewToDelete] = useState(null);
 
-  const rows = useMemo(() => reviews.map((review) => ({
-    ...review,
-    bookTitle: books.find((book) => String(book.id) === String(review.bookId))?.title ?? 'বই',
-    reportCount: review.reports.length,
-    commentPreview: review.comment.length > 70 ? `${review.comment.slice(0, 70)}...` : review.comment,
-  })).filter((review) => {
-    if (activeTab === 'pending') return review.status === 'pending'
-    if (activeTab === 'reported') return review.reportCount > 0
-    if (activeTab === 'approved') return review.status === 'approved'
-    return ['rejected', 'hidden'].includes(review.status)
-  }).sort((first, second) => {
-    if (sortMode === 'reports') return second.reportCount - first.reportCount
-    if (sortMode === 'old') return new Date(first.createdAt) - new Date(second.createdAt)
-    return new Date(second.createdAt) - new Date(first.createdAt)
-  }), [activeTab, reviews, sortMode])
+  const bookMap = useMemo(() => {
+    const map = new Map();
+    books.forEach(b => map.set(String(b.id), b));
+    return map;
+  }, [books]);
+
+  const getBookTitle = bookId =>
+    bookMap.get(String(bookId))?.title || `Book #${bookId}`;
+
+  const counts = {
+    pending: reviews.filter(r => r.status === 'pending').length,
+    approved: reviews.filter(r => r.status === 'approved').length,
+    reported: reviews.filter(r => (r.reports?.length || 0) > 0).length,
+    all: reviews.length,
+  };
+
+  const visible = reviews.filter(review => {
+    if (tab === 'pending') return review.status === 'pending';
+    if (tab === 'approved') return review.status === 'approved';
+    if (tab === 'reported') return (review.reports?.length || 0) > 0;
+    return true;
+  });
+
+  const previousReviewsCount = userId =>
+    reviews.filter(item => item.userId === userId).length;
 
   const updateDecision = (review, status, note = moderatorNote) => {
-    if (!can(PERMISSIONS.REVIEW_MODERATE)) return toast.error('এই কাজের অনুমতি নেই।')
-    if (status === 'rejected' && !note.trim()) return toast.error('প্রত্যাখ্যানের কারণ লিখুন।')
-    const result = updateReview(review.id, { status, moderatorNote: note.trim() }, currentUser)
-    if (!result.success) return toast.error(result.message)
-    toast.success('রিভিউয়ের সিদ্ধান্ত সংরক্ষিত হয়েছে।')
-    setDetail(null)
-    setModeratorNote('')
-  }
+    if (!can(PERMISSIONS.REVIEW_MODERATE)) {
+      toast.error('You do not have permission to moderate reviews.');
+      return;
+    }
+    const result = updateReview(
+      review.id,
+      { status, moderatorNote: (note || '').trim() },
+      currentUser,
+    );
+    if (!result.success) {
+      toast.error(result.message);
+      return;
+    }
+    toast.success(
+      status === 'approved' ? 'Review approved.' : 'Review moved to pending.',
+    );
+    setDetail(null);
+    setModeratorNote('');
+  };
 
-  const dismissReports = (review) => {
-    const result = updateReview(review.id, { reports: [] }, currentUser)
-    toast[result.success ? 'success' : 'error'](result.success ? 'রিপোর্টগুলো খারিজ করা হয়েছে।' : result.message)
-    if (result.success) setDetail(null)
-  }
+  const applyBulkDecision = status => {
+    if (!can(PERMISSIONS.REVIEW_MODERATE)) {
+      toast.error('You do not have permission to moderate reviews.');
+      return;
+    }
+    selected.forEach(id => {
+      updateReview(id, { status }, currentUser);
+    });
+    setSelected([]);
+    toast.success(
+      status === 'approved'
+        ? 'Selected reviews approved.'
+        : 'Selected reviews moved to pending.',
+    );
+  };
 
-  const bulkDecision = (status) => {
-    if (!can(PERMISSIONS.REVIEW_MODERATE)) return toast.error('এই কাজের অনুমতি নেই।')
-    if (!selected.length) return toast.error('অন্তত একটি রিভিউ বাছাই করুন।')
-    if (status === 'rejected' && !moderatorNote.trim()) return toast.error('প্রত্যাখ্যানের কারণ লিখুন।')
-    selected.forEach((id) => updateReview(id, { status, moderatorNote: moderatorNote.trim() }, currentUser))
-    setSelected([])
-    setModeratorNote('')
-    toast.success('বাছাই করা রিভিউগুলোর সিদ্ধান্ত সংরক্ষিত হয়েছে।')
-  }
+  const handleBulkDelete = () => {
+    if (!can(PERMISSIONS.REVIEW_DELETE_ANY)) {
+      toast.error('You do not have permission to delete reviews.');
+      return;
+    }
+    let deleted = 0;
+    selected.forEach(id => {
+      const res = deleteReview(id, currentUser);
+      if (res.success) deleted += 1;
+    });
+    setSelected([]);
+    if (deleted > 0) {
+      toast.success(`${deleted} review(s) deleted.`);
+    }
+  };
 
-  const openDetail = (review) => {
-    setDetail(review)
-    setModeratorNote(review.moderatorNote ?? '')
-  }
+  const confirmDeleteSingle = () => {
+    if (!reviewToDelete) return;
+    const result = deleteReview(reviewToDelete.id, currentUser);
+    if (!result.success) {
+      toast.error(result.message);
+    } else {
+      toast.success('Review deleted.');
+      setSelected(prev => prev.filter(id => id !== reviewToDelete.id));
+      if (detail?.id === reviewToDelete.id) setDetail(null);
+    }
+    setReviewToDelete(null);
+  };
+
+  const dismissReports = review => {
+    if (!can(PERMISSIONS.REVIEW_MODERATE)) return;
+    const result = updateReview(review.id, { reports: [] }, currentUser);
+    if (result.success) {
+      toast.success('Reports dismissed.');
+      setDetail(prev => (prev ? { ...prev, reports: [] } : null));
+    }
+  };
+
+  const openDetail = review => {
+    setDetail(review);
+    setModeratorNote(review.moderatorNote ?? '');
+  };
 
   return (
-    <>
+    <div className="space-y-5">
       <PageHeader
-        title="Review Moderation"
-        description="Review, moderate and manage customer book ratings and comments."
+        title="Reviews"
+        description="Approve, hold as pending, or remove reader reviews."
       />
-      {selected.length > 0 && (
-        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl border border-blue-200 bg-blue-50/50 p-3">
-          <span className="mr-2 text-xs font-semibold text-slate-800">
-            {selected.length} items selected
-          </span>
-          <button
-            type="button"
-            onClick={() => bulkDecision('approved')}
-            className="rounded-xl bg-primary px-3 py-1.5 text-xs font-bold text-dark hover:bg-primary-hover shadow-xs"
-          >
-            Approve
-          </button>
-          <button
-            type="button"
-            onClick={() => bulkDecision('rejected')}
-            className="rounded-xl bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 shadow-xs"
-          >
-            Reject
-          </button>
-          <input
-            value={moderatorNote}
-            onChange={(event) => setModeratorNote(event.target.value)}
-            placeholder="Rejection reason / internal note..."
-            className="min-w-60 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-800 outline-none"
-          />
+
+      {/* Tabs + Bulk actions */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div className="flex flex-wrap gap-1.5">
+          {TABS.map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                setTab(id);
+                setSelected([]);
+              }}
+              className={`rounded-lg px-3.5 py-2 text-xs font-semibold transition ${
+                tab === id
+                  ? 'bg-blue-600 text-white shadow-xs'
+                  : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              {label} ({counts[id]})
+            </button>
+          ))}
         </div>
-      )}
+
+        {selected.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs">
+            <span className="font-semibold text-slate-700">
+              {selected.length} selected
+            </span>
+            <button
+              type="button"
+              onClick={() => applyBulkDecision('approved')}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 font-medium text-emerald-700 transition hover:bg-emerald-50"
+              title="Approve Selected"
+            >
+              <FiCheck size={13} />
+              Approve
+            </button>
+            <button
+              type="button"
+              onClick={() => applyBulkDecision('pending')}
+              className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 font-medium text-amber-700 transition hover:bg-amber-50"
+              title="Set Pending"
+            >
+              <FiClock size={13} />
+              Pending
+            </button>
+            {can(PERMISSIONS.REVIEW_DELETE_ANY) && (
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2.5 py-1 font-medium text-rose-600 transition hover:bg-rose-50"
+                title="Delete Selected"
+              >
+                <FiTrash2 size={13} />
+                Delete
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Table */}
       <DataTable
-        title="Reviews Queue"
-        // subtitle="Manage user ratings, feedback and reported content"
-        tabs={tabs.map(([value, label]) => ({
-          id: value,
-          label,
-          count:
-            value === 'reported'
-              ? reviews.filter((review) => review.reports.length).length
-              : value === 'closed'
-              ? reviews.filter((review) => ['rejected', 'hidden'].includes(review.status)).length
-              : reviews.filter((review) => review.status === value).length,
-        }))}
-        activeTab={activeTab}
-        onTabChange={(tabId) => {
-          setActiveTab(tabId)
-          setSelected([])
-        }}
-        data={rows}
-        searchKeys={['bookTitle', 'userName', 'comment', 'title']}
-        searchPlaceholder="Search by book, reviewer or comment..."
-        filters={[
-          {
-            key: 'rating',
-            label: 'All Ratings',
-            options: [5, 4, 3, 2, 1].map((value) => ({
-              value,
-              label: `${value} Stars`,
-            })),
-          },
-          {
-            key: 'verifiedPurchase',
-            label: 'All Buyers',
-            options: [
-              { value: 'true', label: 'Verified Purchase' },
-              { value: 'false', label: 'Unverified' },
-            ],
-          },
-        ]}
-        onRowClick={openDetail}
+        data={visible}
+        searchKeys={['userName', 'title', 'comment']}
+        searchPlaceholder="Search by reviewer or comment..."
         selectable
         selectedRows={selected}
-        onSelectRow={(id) =>
-          setSelected((current) =>
-            current.includes(id)
-              ? current.filter((item) => item !== id)
-              : [...current, id],
+        onSelectRow={id =>
+          setSelected(prev =>
+            prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id],
           )
         }
-        onSelectAll={(isChecked) =>
-          setSelected(isChecked ? rows.map((r) => r.id) : [])
+        onSelectAll={checked =>
+          setSelected(checked ? visible.map(item => item.id) : [])
         }
+        onRowClick={openDetail}
         columns={[
           {
-            key: 'bookTitle',
-            header: 'Book',
+            key: 'userName',
+            header: 'Reviewer',
             sortable: true,
-            render: (review) => (
-              <span className="font-semibold text-slate-800">{review.bookTitle}</span>
+            render: review => (
+              <div className="min-w-[140px]">
+                <p className="font-semibold text-slate-900">{review.userName}</p>
+                <p className="truncate text-xs text-slate-500">
+                  {getBookTitle(review.bookId)}
+                </p>
+              </div>
             ),
           },
-          { key: 'userName', header: 'Reviewer', sortable: true },
           {
             key: 'rating',
             header: 'Rating',
             sortable: true,
-            render: (review) => <StarRating value={review.rating} size="text-xs" />,
+            render: review => <StarRating value={review.rating} size="text-sm" />,
           },
           {
-            key: 'commentPreview',
-            header: 'Comment',
-            render: (review) => (
-              <span className="line-clamp-1 max-w-xs text-slate-600">
+            key: 'comment',
+            header: 'Review',
+            render: review => (
+              <p className="max-w-md truncate text-sm text-slate-700">
                 {review.comment}
-              </span>
+              </p>
             ),
-          },
-          { key: 'reportCount', header: 'Reports', sortable: true },
-          {
-            key: 'createdAt',
-            header: 'Date',
-            sortable: true,
-            render: (review) =>
-              new Date(review.createdAt).toLocaleDateString('en-US', {
-                month: 'short',
-                day: 'numeric',
-                year: 'numeric',
-              }),
           },
           {
             key: 'status',
             header: 'Status',
-            render: (review) => <StatusBadge status={review.status} />,
+            render: review => <StatusBadge status={review.status} />,
+          },
+          {
+            key: 'reports',
+            header: 'Reports',
+            align: 'center',
+            render: review => (
+              <span className="text-xs text-slate-500">
+                {review.reports?.length || 0}
+              </span>
+            ),
+          },
+          {
+            key: 'actions',
+            header: 'Actions',
+            align: 'right',
+            render: review => (
+              <div
+                className="flex items-center justify-end gap-1"
+                onClick={e => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => openDetail(review)}
+                  className="rounded-lg p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-800"
+                  title="View"
+                  aria-label="View review"
+                >
+                  <FiEye size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateDecision(review, 'approved')}
+                  className={`rounded-lg p-1.5 transition ${
+                    review.status === 'approved'
+                      ? 'bg-emerald-50 text-emerald-700'
+                      : 'text-slate-500 hover:bg-emerald-50 hover:text-emerald-700'
+                  }`}
+                  title="Approve"
+                  aria-label="Approve review"
+                >
+                  <FiCheck size={15} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateDecision(review, 'pending')}
+                  className={`rounded-lg p-1.5 transition ${
+                    review.status === 'pending'
+                      ? 'bg-amber-50 text-amber-700'
+                      : 'text-slate-500 hover:bg-amber-50 hover:text-amber-700'
+                  }`}
+                  title="Pending"
+                  aria-label="Set pending"
+                >
+                  <FiClock size={15} />
+                </button>
+                {can(PERMISSIONS.REVIEW_DELETE_ANY) && (
+                  <button
+                    type="button"
+                    onClick={() => setReviewToDelete(review)}
+                    className="rounded-lg p-1.5 text-slate-500 transition hover:bg-rose-50 hover:text-rose-600"
+                    title="Delete"
+                    aria-label="Delete review"
+                  >
+                    <FiTrash2 size={15} />
+                  </button>
+                )}
+              </div>
+            ),
           },
         ]}
-        rowActions={(review) => [
-          { label: 'Details', onClick: () => openDetail(review) },
-          ...(can(PERMISSIONS.REVIEW_DELETE_ANY)
-            ? [
-                {
-                  label: 'Delete Permanently',
-                  danger: true,
-                  onClick: () => {
-                    const result = deleteReview(review.id, currentUser)
-                    toast[result.success ? 'success' : 'error'](
-                      result.success ? 'Review deleted.' : result.message,
-                    )
-                  },
-                },
-              ]
-            : []),
-        ]}
-        emptyMessage="No reviews found in this tab."
+        emptyMessage="No reviews found."
       />
+
       {detail && (
         <ReviewDetail
           review={detail}
-          previousCount={reviews.filter((review) => review.userId === detail.userId && review.id !== detail.id).length}
+          bookTitle={getBookTitle(detail.bookId)}
+          previousCount={previousReviewsCount(detail.userId)}
           moderatorNote={moderatorNote}
           onNoteChange={setModeratorNote}
-          onClose={() => setDetail(null)}
-          onDecision={(status) => updateDecision(detail, status)}
+          onClose={() => {
+            setDetail(null);
+            setModeratorNote('');
+          }}
+          onDecision={status => updateDecision(detail, status)}
           onDismissReports={() => dismissReports(detail)}
           canDeleteAny={can(PERMISSIONS.REVIEW_DELETE_ANY)}
-          onDelete={() => { const result = deleteReview(detail.id, currentUser); toast[result.success ? 'success' : 'error'](result.success ? 'রিভিউ মুছে ফেলা হয়েছে।' : result.message); if (result.success) setDetail(null) }}
+          onDelete={() => setReviewToDelete(detail)}
         />
       )}
-    </>
-  )
+
+      <ConfirmModal
+        isOpen={Boolean(reviewToDelete)}
+        title="Delete Review?"
+        message={`Are you sure you want to permanently delete ${reviewToDelete?.userName || 'this'}'s review?`}
+        confirmLabel="Delete"
+        onConfirm={confirmDeleteSingle}
+        onCancel={() => setReviewToDelete(null)}
+      />
+    </div>
+  );
 }
 
-function ReviewDetail({ review, previousCount, moderatorNote, onNoteChange, onClose, onDecision, onDismissReports, canDeleteAny, onDelete }) {
+function ReviewDetail({
+  review,
+  bookTitle,
+  previousCount,
+  moderatorNote,
+  onNoteChange,
+  onClose,
+  onDecision,
+  onDismissReports,
+  canDeleteAny,
+  onDelete,
+}) {
   return (
-    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-dark/60 px-5 py-8">
-      <div className="max-h-full w-full max-w-2xl overflow-y-auto rounded-xl bg-white p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <div><h2 className="font-heading text-2xl font-bold text-dark">{review.userName}</h2><p className="mt-1 text-sm text-dark-muted">আগের রিভিউ: {previousCount}টি</p></div>
-          <button type="button" onClick={onClose} className="text-sm font-semibold text-dark-muted">বন্ধ করুন</button>
+    <div
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-900/45 px-4 py-6"
+      onClick={onClose}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-slate-200 bg-white p-6 shadow-xl"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4 border-b border-slate-100 pb-4">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="font-heading text-lg font-bold text-slate-900">
+                {review.userName}
+              </h2>
+              <StatusBadge status={review.status} />
+            </div>
+            <p className="mt-1 text-xs text-slate-500">
+              Book: <span className="font-medium text-slate-700">{bookTitle}</span> ·{' '}
+              {previousCount} total review{previousCount === 1 ? '' : 's'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 hover:text-slate-900"
+          >
+            <FiX size={14} />
+            Close
+          </button>
         </div>
-        <div className="mt-5"><StarRating value={review.rating} /><p className="mt-4 leading-8 text-dark">{review.comment}</p></div>
-        {review.reports.length > 0 && <div className="mt-5 rounded-lg bg-red-50 p-4"><p className="font-semibold text-red-700">রিপোর্টের কারণ</p><ul className="mt-2 list-disc pl-5 text-sm text-red-700">{review.reports.map((report) => <li key={`${report.userId}-${report.createdAt}`}>{report.reason}</li>)}</ul><button type="button" onClick={onDismissReports} className="mt-3 text-sm font-semibold text-red-700 underline">রিপোর্ট খারিজ করুন</button></div>}
-        <textarea value={moderatorNote} onChange={(event) => onNoteChange(event.target.value)} placeholder="প্রত্যাখ্যান/মডারেটরের কারণ" rows={3} className="mt-5 w-full rounded-lg border border-dark/10 bg-cream p-3 text-dark" />
-        <div className="mt-5 flex flex-wrap justify-end gap-2">
-          <button type="button" onClick={() => onDecision('approved')} className="rounded-md bg-primary px-4 py-2 font-semibold text-dark">অনুমোদন</button>
-          <button type="button" onClick={() => onDecision('rejected')} className="rounded-md bg-red-600 px-4 py-2 font-semibold text-white">প্রত্যাখ্যান</button>
-          <button type="button" onClick={() => onDecision('hidden')} className="rounded-md border border-dark/10 px-4 py-2 font-semibold text-dark">লুকান</button>
-          {canDeleteAny && <button type="button" onClick={onDelete} className="rounded-md border border-red-200 px-4 py-2 font-semibold text-red-600">স্থায়ীভাবে মুছুন</button>}
+
+        {/* Review Content */}
+        <div className="mt-4 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <StarRating value={review.rating} />
+            {review.createdAt && (
+              <span className="text-xs text-slate-400">
+                {new Date(review.createdAt).toLocaleDateString()}
+              </span>
+            )}
+          </div>
+          {review.title && (
+            <h3 className="text-sm font-semibold text-slate-900">
+              {review.title}
+            </h3>
+          )}
+          <p className="whitespace-pre-line rounded-lg border border-slate-100 bg-slate-50/70 p-3.5 text-sm leading-6 text-slate-700">
+            {review.comment}
+          </p>
+        </div>
+
+        {/* Reports if any */}
+        {review.reports?.length > 0 && (
+          <div className="mt-4 rounded-lg border border-rose-200 bg-rose-50/60 p-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-rose-700">
+                Reports ({review.reports.length})
+              </p>
+              <button
+                type="button"
+                onClick={onDismissReports}
+                className="text-xs font-semibold text-rose-700 underline hover:text-rose-800"
+              >
+                Dismiss
+              </button>
+            </div>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-rose-700">
+              {review.reports.map(report => (
+                <li key={`${report.userId}-${report.createdAt}`}>
+                  {report.reason}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Note */}
+        <div className="mt-4">
+          <label className="mb-1.5 block text-xs font-medium text-slate-600">
+            Note (optional)
+          </label>
+          <textarea
+            value={moderatorNote}
+            onChange={event => onNoteChange(event.target.value)}
+            placeholder="Add internal or moderation note..."
+            rows={2}
+            className="w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm text-slate-800 outline-none focus:border-slate-500"
+          />
+        </div>
+
+        {/* Actions: Only Approve, Pending, Delete */}
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 pt-4">
+          <button
+            type="button"
+            onClick={() => onDecision('approved')}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50"
+            title="Approve"
+          >
+            <FiCheck size={14} />
+            Approve
+          </button>
+          <button
+            type="button"
+            onClick={() => onDecision('pending')}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-amber-700 transition hover:bg-amber-50"
+            title="Pending"
+          >
+            <FiClock size={14} />
+            Pending
+          </button>
+          {canDeleteAny && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-rose-600 transition hover:bg-rose-50"
+              title="Delete"
+            >
+              <FiTrash2 size={14} />
+              Delete
+            </button>
+          )}
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-export default ReviewModeration
+export default ReviewModeration;

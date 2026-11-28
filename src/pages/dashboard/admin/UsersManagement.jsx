@@ -1,36 +1,45 @@
 import { useState, useMemo } from 'react';
 import {
   FiArrowLeft,
-  FiCalendar,
   FiCheckCircle,
   FiClock,
   FiCopy,
   FiExternalLink,
   FiEye,
-  FiFileText,
   FiHeart,
   FiMail,
   FiMapPin,
   FiPackage,
   FiPhone,
+  FiPhoneCall,
+  FiPlus,
   FiPrinter,
   FiSearch,
   FiShoppingBag,
+  FiShoppingCart,
   FiTrendingUp,
   FiTruck,
-  FiUser,
-  FiUserCheck,
   FiUsers,
   FiX,
   FiXCircle,
 } from 'react-icons/fi';
 import { FaWhatsapp } from 'react-icons/fa';
 import toast from 'react-hot-toast';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import FollowUpModal from '../../../components/dashboard/FollowUpModal';
 import PageHeader from '../../../components/dashboard/PageHeader';
 import StatusBadge from '../../../components/dashboard/StatusBadge';
 import { useAuth } from '../../../context/useAuth';
 import { useData } from '../../../context/useData';
+import {
+  assignDailyFollowUpBatch,
+  assignUserFollowUp,
+  getFollowUpAssignments,
+  getFollowUpLogs,
+  getFollowUpSettings,
+  getTodayFollowUpStats,
+  saveFollowUpSettings,
+} from '../../../utils/followUpStorage';
 
 /* ------------------------------------------------------------------ */
 /* Constants & Helpers                                                 */
@@ -92,6 +101,37 @@ function readWishlistIds(userId) {
   } catch {
     return [];
   }
+}
+
+const DEFAULT_CART_SEEDS = {
+  'user-reader-1': [
+    { bookId: 2, quantity: 1 },
+    { bookId: 5, quantity: 2 },
+  ],
+  'user-reader-2': [
+    { bookId: 3, quantity: 1 },
+    { bookId: 6, quantity: 1 },
+  ],
+  'user-reader-3': [{ bookId: 1, quantity: 1 }],
+  'user-reader-4': [
+    { bookId: 4, quantity: 1 },
+    { bookId: 7, quantity: 1 },
+  ],
+  'user-reader-5': [{ bookId: 8, quantity: 2 }],
+  'user-reader-7': [{ bookId: 3, quantity: 1 }],
+};
+
+function readCartItems(user) {
+  try {
+    const stored = localStorage.getItem(`hosonta_cart_${user.id}`);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // ignore invalid cart json
+  }
+  return user.cart || DEFAULT_CART_SEEDS[user.id] || [];
 }
 
 // Resolves book details (cover, title, author, price) from the books dataset
@@ -762,9 +802,18 @@ function OrderDetailsInvoiceModal({ order, user, allBooks, onClose }) {
 /* User Profile Details View                                          */
 /* ------------------------------------------------------------------ */
 
-function UserDetailsView({ user, onBack, allOrders, allBooks }) {
+export function UserDetailsView({
+  user,
+  onBack,
+  allOrders,
+  allBooks,
+  staffUsers = [],
+  currentUser,
+  onRefresh,
+}) {
   const [activeTab, setActiveTab] = useState('orders');
   const [selectedOrderForModal, setSelectedOrderForModal] = useState(null);
+  const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
 
   // Filter orders of this user
   const userOrders = useMemo(() => {
@@ -783,6 +832,32 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
       ids.some((id) => String(id) === String(book.id))
     );
   }, [allBooks, user]);
+
+  // Add to Cart books (with quantity)
+  const userCartBooks = useMemo(() => {
+    const items = user.cartItems || [];
+    return items
+      .map((item) => {
+        const matched = allBooks.find((b) => String(b.id) === String(item.bookId));
+        if (!matched) return null;
+        return {
+          ...matched,
+          cartQuantity: Number(item.quantity || 1),
+        };
+      })
+      .filter(Boolean);
+  }, [allBooks, user]);
+
+  const retargetHint = useMemo(() => {
+    const titles = [
+      ...userCartBooks.map((b) => b.title),
+      ...userWishlistBooks.map((b) => b.title),
+    ];
+    return Array.from(new Set(titles)).slice(0, 3).join(', ');
+  }, [userCartBooks, userWishlistBooks]);
+
+  const userFollowUpLogs = user.followUpLogs || [];
+  const assignment = user.followUpAssignment || null;
 
   return (
     <div className="space-y-6">
@@ -879,14 +954,23 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
             </div>
           </div>
 
-          {/* Quick contact buttons */}
+          {/* Quick contact & follow-up actions */}
           <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 pt-4 md:border-0 md:pt-0">
+            <button
+              type="button"
+              onClick={() => setFollowUpModalOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-dark transition hover:bg-primary-hover"
+            >
+              <FiPhoneCall /> Follow Up
+            </button>
             {user.phone && (
               <a
                 href={`tel:${user.phone}`}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-slate-100 px-3.5 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-200"
+                title="Call"
+                aria-label="Call"
+                className="p-2 text-slate-600 hover:text-dark transition"
               >
-                <FiPhone /> Call
+                <FiPhone size={16} />
               </a>
             )}
             {user.phone && (
@@ -894,16 +978,20 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                 href={`https://wa.me/${toEnDigits(user.phone).replace(/[^\d]/g, '')}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-50 px-3.5 py-2 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                title="WhatsApp"
+                aria-label="WhatsApp"
+                className="p-2 text-emerald-600 hover:text-emerald-800 transition"
               >
-                <FaWhatsapp /> WhatsApp
+                <FaWhatsapp size={17} />
               </a>
             )}
             <a
               href={`mailto:${user.email}`}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-primary px-3.5 py-2 text-xs font-semibold text-dark transition hover:bg-primary-hover"
+              title="Send Email"
+              aria-label="Send Email"
+              className="p-2 text-slate-600 hover:text-dark transition"
             >
-              <FiMail /> Send Email
+              <FiMail size={16} />
             </a>
           </div>
         </div>
@@ -911,14 +999,12 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
 
       {/* 4 Key Statistics Cards */}
       <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-              <FiShoppingBag className="text-xl" />
-            </span>
-            <span className="text-[11px] font-medium text-slate-400">Total Orders</span>
+            <span className="text-xs font-semibold text-slate-500">Total Orders</span>
+            <FiShoppingBag className="text-base text-blue-600" />
           </div>
-          <p className="mt-3 text-2xl font-bold text-slate-900">
+          <p className="mt-2 text-xl font-bold text-slate-900">
             {user.orderCount}
           </p>
           <p className="mt-0.5 text-xs text-slate-500">
@@ -926,66 +1012,47 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
           </p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-              <FiTrendingUp className="text-xl" />
-            </span>
-            <span className="text-[11px] font-medium text-slate-400">Total Spent</span>
+            <span className="text-xs font-semibold text-slate-500">Total Spent</span>
+            <FiTrendingUp className="text-base text-emerald-600" />
           </div>
-          <p className="mt-3 text-2xl font-bold text-slate-900">
+          <p className="mt-2 text-xl font-bold text-slate-900">
             {formatCurrency(user.totalSpent)}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">Total purchase volume</p>
+          <p className="mt-0.5 text-xs text-slate-500">Delivery: {user.deliveryRate}%</p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
-            <span
-              className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                user.deliveryRate >= 90
-                  ? 'bg-emerald-50 text-emerald-600'
-                  : user.deliveryRate >= 80
-                  ? 'bg-amber-50 text-amber-600'
-                  : 'bg-rose-50 text-rose-600'
-              }`}
-            >
-              <FiTruck className="text-xl" />
-            </span>
-            <span className="text-[11px] font-medium text-slate-400">Delivery Success</span>
+            <span className="text-xs font-semibold text-slate-500">Add to Cart</span>
+            <FiShoppingCart className="text-base text-amber-600" />
           </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-slate-900">
-              {user.deliveryRate}%
-            </span>
-            <span className="text-xs font-semibold text-emerald-600">
-              {user.deliveryRate >= 90 ? 'Excellent' : 'Average'}
-            </span>
-          </div>
-          <p className="mt-0.5 text-xs text-slate-500">Parcel acceptance rate</p>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
-          <div className="flex items-center justify-between">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-50 text-rose-600">
-              <FiHeart className="text-xl" />
-            </span>
-            <span className="text-[11px] font-medium text-slate-400">Wishlist Saved</span>
-          </div>
-          <p className="mt-3 text-2xl font-bold text-slate-900">
-            {user.wishlistCount}
+          <p className="mt-2 text-xl font-bold text-slate-900">
+            {userCartBooks.length}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">Books saved in wishlist</p>
+          <p className="mt-0.5 text-xs text-slate-500">Books ready to retarget</p>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-500">Wishlist Saved</span>
+            <FiHeart className="text-base text-rose-600" />
+          </div>
+          <p className="mt-2 text-xl font-bold text-slate-900">
+            {userWishlistBooks.length}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">Follow-ups: {userFollowUpLogs.length}</p>
         </div>
       </div>
 
-      {/* Tabs: Orders / Wishlist / Contact Info */}
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
-        <div className="flex border-b border-slate-200 bg-slate-50/50 px-4 pt-2">
+      {/* Tabs: Orders / Cart / Wishlist / Follow-Up History / Contact Info */}
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex overflow-x-auto border-b border-slate-200 bg-white px-4 pt-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button
             type="button"
             onClick={() => setActiveTab('orders')}
-            className={`border-b-2 px-4 py-3 text-xs sm:text-sm font-semibold transition ${
+            className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs sm:text-sm font-semibold transition ${
               activeTab === 'orders'
                 ? 'border-primary text-dark font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -995,8 +1062,19 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('cart')}
+            className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs sm:text-sm font-semibold transition ${
+              activeTab === 'cart'
+                ? 'border-primary text-dark font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Cart Books ({userCartBooks.length})
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('wishlist')}
-            className={`border-b-2 px-4 py-3 text-xs sm:text-sm font-semibold transition ${
+            className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs sm:text-sm font-semibold transition ${
               activeTab === 'wishlist'
                 ? 'border-primary text-dark font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -1006,8 +1084,19 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab('followup')}
+            className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs sm:text-sm font-semibold transition ${
+              activeTab === 'followup'
+                ? 'border-primary text-dark font-bold'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            Follow-Up History ({userFollowUpLogs.length})
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('info')}
-            className={`border-b-2 px-4 py-3 text-xs sm:text-sm font-semibold transition ${
+            className={`whitespace-nowrap border-b-2 px-4 py-3 text-xs sm:text-sm font-semibold transition ${
               activeTab === 'info'
                 ? 'border-primary text-dark font-bold'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -1113,6 +1202,51 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
           </div>
         )}
 
+        {/* Tab 1.5: Add to Cart Books (Same Card Design as Wishlist Books) */}
+        {activeTab === 'cart' && (
+          <div className="p-4 sm:p-5">
+            {userCartBooks.length === 0 ? (
+              <div className="py-12 text-center text-slate-400">
+                <FiShoppingCart className="mx-auto text-4xl text-slate-300" />
+                <p className="mt-2 text-sm font-medium">No books currently in cart.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3.5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                {userCartBooks.map((book) => (
+                  <div
+                    key={book.id}
+                    className="flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white p-2.5 transition hover:shadow-md"
+                  >
+                    <div className="aspect-[3/4] w-full overflow-hidden rounded-lg bg-slate-100">
+                      <img
+                        src={book.cover || book.image}
+                        alt={book.title}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="mt-2 flex flex-1 flex-col">
+                      <p className="font-heading text-xs font-bold text-slate-900 line-clamp-1">
+                        {book.title}
+                      </p>
+                      <p className="text-[11px] text-slate-500 line-clamp-1">
+                        {book.author}
+                      </p>
+                      <div className="mt-auto flex items-center justify-between pt-1">
+                        <span className="font-heading text-xs font-bold text-slate-900">
+                          {formatCurrency(book.price)}
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-500">
+                          Qty: {book.cartQuantity}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Tab 2: Wishlist Tab */}
         {activeTab === 'wishlist' && (
           <div className="p-4 sm:p-5">
@@ -1146,6 +1280,101 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
                         {formatCurrency(book.price)}
                       </p>
                     </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tab 2.5: Follow-Up & Retargeting Call History */}
+        {activeTab === 'followup' && (
+          <div className="space-y-4 p-4 sm:p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+              <div className="flex flex-wrap items-center gap-3 text-xs">
+                <span className="text-slate-500">
+                  Assigned To:{' '}
+                  <strong className="text-slate-900">
+                    {assignment?.assignedToName || 'Unassigned'}
+                  </strong>
+                </span>
+                {assignment?.status && (
+                  <span className="font-semibold text-emerald-700">
+                    Status: {assignment.status}
+                  </span>
+                )}
+                {staffUsers.length > 0 && currentUser?.role === 'admin' && (
+                  <select
+                    value={assignment?.assignedToId || ''}
+                    onChange={(e) => {
+                      const targetStaff = staffUsers.find((s) => s.id === e.target.value);
+                      if (!targetStaff) return;
+                      assignUserFollowUp({
+                        userId: user.id,
+                        assignedToId: targetStaff.id,
+                        assignedToName: targetStaff.name,
+                        assignedToRole: targetStaff.role,
+                      });
+                      toast.success(`Assigned ${user.name} to ${targetStaff.name}.`);
+                      onRefresh?.();
+                    }}
+                    className="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 outline-none focus:border-primary"
+                  >
+                    <option value="">Assign Moderator / Staff...</option>
+                    {staffUsers.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.role})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setFollowUpModalOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-dark hover:bg-primary-hover"
+              >
+                <FiPlus size={13} />
+                <span>Log Call / Note</span>
+              </button>
+            </div>
+
+            {userFollowUpLogs.length === 0 ? (
+              <div className="py-10 text-center text-xs text-slate-400">
+                No follow-up calls recorded yet. Click &ldquo;Log Call / Note&rdquo; to add the first update.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100">
+                {userFollowUpLogs.map((log) => (
+                  <div key={log.id} className="space-y-1.5 py-3 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono font-bold text-slate-700">
+                          {log.id}
+                        </span>
+                        <span className="font-semibold text-emerald-700">
+                          {log.outcome}
+                        </span>
+                        <span className="text-slate-500">via {log.channel}</span>
+                      </div>
+                      <span className="text-[11px] text-slate-400">
+                        {formatDate(log.createdAt)} ·{' '}
+                        <strong className="text-slate-700">{log.followedByName}</strong> (
+                        {log.followedByRole})
+                      </span>
+                    </div>
+                    {log.retargetBooks && (
+                      <p className="text-[11px] font-semibold text-slate-700">
+                        Books: {log.retargetBooks}
+                      </p>
+                    )}
+                    <p className="text-slate-600">{log.note}</p>
+                    {log.nextFollowUpDate && (
+                      <p className="text-[11px] text-amber-700">
+                        Next Follow-Up: {formatDate(log.nextFollowUpDate)}
+                      </p>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1238,6 +1467,16 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
           onClose={() => setSelectedOrderForModal(null)}
         />
       )}
+
+      {/* Log Follow-Up / Retargeting Modal */}
+      <FollowUpModal
+        isOpen={followUpModalOpen}
+        user={user}
+        retargetBooksHint={retargetHint}
+        currentUser={currentUser}
+        onClose={() => setFollowUpModalOpen(false)}
+        onSaved={() => onRefresh?.()}
+      />
     </div>
   );
 }
@@ -1247,18 +1486,51 @@ function UserDetailsView({ user, onBack, allOrders, allBooks }) {
 /* ------------------------------------------------------------------ */
 
 function UsersManagement() {
-  const { users: authUsers = [] } = useAuth();
+  const { currentUser, users: authUsers = [] } = useAuth();
   const { orders = [], books = [] } = useData();
   const { userName: routeUserName, id: routeUserId } = useParams();
   const navigate = useNavigate();
+
+  const [refreshTick, setRefreshTick] = useState(0);
+  const triggerRefresh = () => setRefreshTick((t) => t + 1);
 
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sortBy, setSortBy] = useState('orders');
 
+  // Follow-up assignment modal & quick call modal
+  const [planModalOpen, setPlanModalOpen] = useState(false);
+  const [quickFollowUpUser, setQuickFollowUpUser] = useState(null);
+
+  const staffUsers = useMemo(
+    () =>
+      authUsers.filter((u) =>
+        ['moderator', 'employee', 'admin'].includes(u.role)
+      ),
+    [authUsers]
+  );
+
+  const moderatorUsers = useMemo(
+    () => authUsers.filter((u) => u.role === 'moderator' || u.role === 'admin'),
+    [authUsers]
+  );
+
+  const [followUpSettings, setFollowUpSettings] = useState(getFollowUpSettings);
+  const [planForm, setPlanForm] = useState(() => ({
+    dailyTarget: String(getFollowUpSettings().dailyTarget || 10),
+    assignedModeratorId:
+      getFollowUpSettings().assignedModeratorId ||
+      moderatorUsers[0]?.id ||
+      'user-moderator-1',
+  }));
+
   // Compute metrics for each user
   const processedUsers = useMemo(() => {
+    void refreshTick;
+    const assignments = getFollowUpAssignments();
+    const allLogs = getFollowUpLogs();
+
     return authUsers.map((user) => {
       // Find orders matching this user
       const userOrders = orders.filter(
@@ -1283,6 +1555,14 @@ function UsersManagement() {
       const wishlistIds = localWishlist.length > 0 ? localWishlist : user.wishlist || [];
       const wishlistCount = wishlistIds.length;
 
+      // Cart items
+      const cartItems = readCartItems(user);
+      const cartCount = cartItems.reduce((sum, item) => sum + Number(item.quantity || 1), 0);
+
+      // Follow-up assignment & logs
+      const followUpAssignment = assignments[user.id] || null;
+      const followUpLogs = allLogs.filter((l) => String(l.userId) === String(user.id));
+
       return {
         ...user,
         phone: toEnDigits(user.phone || '01712-345678'),
@@ -1292,9 +1572,18 @@ function UsersManagement() {
         deliveryRate,
         wishlistIds,
         wishlistCount,
+        cartItems,
+        cartCount,
+        followUpAssignment,
+        followUpLogs,
       };
     });
-  }, [authUsers, orders]);
+  }, [authUsers, orders, refreshTick]);
+
+  const todayStats = useMemo(() => {
+    void refreshTick;
+    return getTodayFollowUpStats(followUpSettings.assignedModeratorId);
+  }, [followUpSettings.assignedModeratorId, refreshTick]);
 
   // Active view: match by route user name (with fallback to selectedUserId or legacy ID)
   const activeUser = useMemo(() => {
@@ -1383,82 +1672,129 @@ function UsersManagement() {
         onBack={handleBackToList}
         allOrders={orders}
         allBooks={books}
+        staffUsers={staffUsers}
+        currentUser={currentUser}
+        onRefresh={triggerRefresh}
       />
     );
   }
+
+  const handleSaveFollowUpPlan = (e) => {
+    e.preventDefault();
+    const targetMod =
+      staffUsers.find((u) => u.id === planForm.assignedModeratorId) || staffUsers[0];
+    const targetCount = Math.max(1, Number(planForm.dailyTarget) || 10);
+    if (!targetMod) {
+      toast.error('Please select a moderator.');
+      return;
+    }
+    const nextSettings = saveFollowUpSettings({
+      dailyTarget: targetCount,
+      assignedModeratorId: targetMod.id,
+      assignedModeratorName: targetMod.name,
+    });
+    const assignedCount = assignDailyFollowUpBatch({
+      users: processedUsers,
+      assignedToId: targetMod.id,
+      assignedToName: targetMod.name,
+      assignedToRole: targetMod.role,
+      dailyTarget: targetCount,
+    });
+    setFollowUpSettings(nextSettings);
+    setPlanModalOpen(false);
+    triggerRefresh();
+    toast.success(
+      `Assigned ${assignedCount} users (Target: ${targetCount}/day) to ${targetMod.name}.`
+    );
+  };
+
+  const quickHintBooks = quickFollowUpUser
+    ? Array.from(
+        new Set(
+          [
+            ...(quickFollowUpUser.cartItems || []).map((c) => {
+              const found = books.find((b) => String(b.id) === String(c.bookId));
+              return found?.title;
+            }),
+            ...(quickFollowUpUser.wishlistIds || []).map((id) => {
+              const found = books.find((b) => String(b.id) === String(id));
+              return found?.title;
+            }),
+          ].filter(Boolean)
+        )
+      )
+        .slice(0, 3)
+        .join(', ')
+    : '';
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="Users Management"
-        description="Directory of all registered customers, contact details, delivery rates, orders, and wishlist insights."
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-slate-500">
+              Daily Plan: <strong className="text-slate-900">{todayStats.uniqueUsersToday}/{followUpSettings.dailyTarget}</strong> · {followUpSettings.assignedModeratorName}
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                setPlanForm({
+                  dailyTarget: String(followUpSettings.dailyTarget || 10),
+                  assignedModeratorId:
+                    followUpSettings.assignedModeratorId || moderatorUsers[0]?.id || '',
+                });
+                setPlanModalOpen(true);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-xs font-bold text-dark hover:bg-primary-hover"
+            >
+              <FiPhoneCall size={14} />
+              <span>Follow-Up Plan</span>
+            </button>
+          </div>
+        }
       />
-
-      {/* Navigation Tab to Counter Sales */}
-      <div className="flex flex-wrap items-center gap-2 border-b border-dark/10 pb-3">
-        <span className="rounded-xl border border-primary bg-primary px-4 py-2 text-xs font-bold text-dark shadow-2xs flex items-center gap-1.5">
-          <FiUsers /> Users List
-        </span>
-        <Link
-          to="/dashboard/counter-orders"
-          className="rounded-xl border border-dark/10 bg-white px-4 py-2 text-xs font-bold text-dark/70 hover:bg-cream hover:text-dark transition shadow-2xs flex items-center gap-1.5"
-        >
-          <FiShoppingBag className="text-sm" /> Counter Sales
-        </Link>
-      </div>
 
       {/* 4 Summary Cards */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
-              <FiUsers className="text-xl" />
-            </span>
             <span className="text-xs font-semibold text-slate-500">Total Users</span>
+            <FiUsers className="text-base text-blue-600" />
           </div>
-          <p className="mt-3 text-2xl font-bold text-slate-900">
+          <p className="mt-2 text-xl font-bold text-slate-900">
             {totalUsersCount}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">Registered buyers & users</p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
-              <FiPackage className="text-xl" />
-            </span>
             <span className="text-xs font-semibold text-slate-500">Total Orders</span>
+            <FiPackage className="text-base text-amber-600" />
           </div>
-          <p className="mt-3 text-2xl font-bold text-slate-900">
+          <p className="mt-2 text-xl font-bold text-slate-900">
             {totalOrdersCount}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">Total orders placed</p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-              <FiTrendingUp className="text-xl" />
-            </span>
             <span className="text-xs font-semibold text-slate-500">Total Sales</span>
+            <FiTrendingUp className="text-base text-emerald-600" />
           </div>
-          <p className="mt-3 text-2xl font-bold text-slate-900">
+          <p className="mt-2 text-xl font-bold text-slate-900">
             {formatCurrency(totalSpentAll)}
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">Combined customer spending</p>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex items-center justify-between">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-              <FiTruck className="text-xl" />
-            </span>
-            <span className="text-xs font-semibold text-slate-500">Avg. Delivery Rate</span>
+            <span className="text-xs font-semibold text-slate-500">Delivery Rate</span>
+            <FiTruck className="text-base text-indigo-600" />
           </div>
-          <p className="mt-3 text-2xl font-bold text-slate-900">
+          <p className="mt-2 text-xl font-bold text-slate-900">
             {avgDeliveryRate}%
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">Successful parcel acceptance</p>
         </div>
       </div>
 
@@ -1523,13 +1859,14 @@ function UsersManagement() {
         <div className="overflow-x-auto">
           <table className="w-full min-w-[850px] text-left text-sm">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/70 text-xs font-semibold text-slate-500">
-                <th className="px-5 py-3.5">User (Name & Role)</th>
-                <th className="px-5 py-3.5">Contact Info</th>
+              <tr className="whitespace-nowrap border-b border-slate-200 bg-white text-xs font-semibold text-slate-500">
+                <th className="px-5 py-3.5">User</th>
+                <th className="px-5 py-3.5">Contact</th>
                 <th className="px-5 py-3.5 text-center">Delivery Rate</th>
                 <th className="px-5 py-3.5 text-center">Orders</th>
                 <th className="px-5 py-3.5 text-right">Total Spent</th>
-                <th className="px-5 py-3.5 text-center">Wishlist</th>
+                <th className="px-5 py-3.5 text-center">Cart / Wish</th>
+                <th className="px-5 py-3.5">Follow-Up</th>
                 <th className="px-5 py-3.5 text-center">Status</th>
                 <th className="px-5 py-3.5 text-right">Action</th>
               </tr>
@@ -1627,12 +1964,34 @@ function UsersManagement() {
                     </p>
                   </td>
 
-                  {/* Wishlist count */}
+                  {/* Cart & Wishlist count */}
                   <td className="whitespace-nowrap px-5 py-3.5 text-center">
-                    <span className="inline-flex items-center gap-1 text-xs font-semibold text-rose-600">
-                      <FiHeart className="text-rose-500 fill-rose-500/20" />
-                      <span>{user.wishlistCount}</span>
-                    </span>
+                    <div className="inline-flex items-center gap-3 text-xs font-semibold">
+                      <span className="inline-flex items-center gap-1 text-amber-700" title="Cart Books">
+                        <FiShoppingCart size={13} />
+                        <span>{user.cartCount}</span>
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-rose-600" title="Wishlist Books">
+                        <FiHeart size={13} />
+                        <span>{user.wishlistCount}</span>
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* Assigned Moderator & Follow-Up Status */}
+                  <td className="whitespace-nowrap px-5 py-3.5 text-xs">
+                    {user.followUpAssignment ? (
+                      <div>
+                        <p className="font-semibold text-slate-800">
+                          {user.followUpAssignment.assignedToName}
+                        </p>
+                        <p className="text-[11px] text-slate-500">
+                          {user.followUpAssignment.status}
+                        </p>
+                      </div>
+                    ) : (
+                      <span className="text-slate-400">Unassigned</span>
+                    )}
                   </td>
 
                   {/* Status */}
@@ -1655,17 +2014,32 @@ function UsersManagement() {
 
                   {/* Action */}
                   <td className="whitespace-nowrap px-5 py-3.5 text-right">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelectUser(user);
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-primary hover:text-dark"
-                    >
-                      <FiEye className="text-xs" />
-                      <span>Details</span>
-                    </button>
+                    <div className="inline-flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setQuickFollowUpUser(user);
+                        }}
+                        title="Follow Up / Log Call"
+                        aria-label="Follow Up / Log Call"
+                        className="p-1 text-emerald-600 hover:text-emerald-800 transition"
+                      >
+                        <FiPhoneCall size={15} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectUser(user);
+                        }}
+                        title="View User Profile"
+                        aria-label="View User Profile"
+                        className="p-1 text-slate-500 hover:text-dark transition"
+                      >
+                        <FiEye size={16} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1691,6 +2065,104 @@ function UsersManagement() {
           </span>
         </div>
       </section>
+
+      {/* Daily Follow-Up Plan & Moderator Assignment Modal */}
+      {planModalOpen && (
+        <div
+          onClick={() => setPlanModalOpen(false)}
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-xl bg-white p-5 sm:p-6 shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="text-base font-bold text-slate-900">
+                Daily Follow-Up Settings
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPlanModalOpen(false)}
+                aria-label="Close"
+                className="p-1 text-slate-400 hover:text-dark"
+              >
+                <FiX size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleSaveFollowUpPlan} className="mt-4 space-y-4 text-xs">
+              <div>
+                <label className="mb-1 block font-semibold text-slate-700">
+                  Assign Moderator / Staff *
+                </label>
+                <select
+                  required
+                  value={planForm.assignedModeratorId}
+                  onChange={(e) =>
+                    setPlanForm((p) => ({ ...p, assignedModeratorId: e.target.value }))
+                  }
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary"
+                >
+                  {staffUsers.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name} ({s.role})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block font-semibold text-slate-700">
+                  Daily Follow-Up Target (Users per day) *
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="200"
+                  required
+                  value={planForm.dailyTarget}
+                  onChange={(e) =>
+                    setPlanForm((p) => ({ ...p, dailyTarget: e.target.value }))
+                  }
+                  placeholder="e.g. 10"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-900 outline-none focus:border-primary"
+                />
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Prioritizes users with Cart and Wishlist books for retargeting.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setPlanModalOpen(false)}
+                  className="rounded-lg border border-slate-200 px-4 py-2 font-semibold text-slate-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="rounded-lg bg-primary px-4 py-2 font-bold text-dark hover:bg-primary-hover"
+                >
+                  Save & Assign Batch
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Follow-Up Modal from Table */}
+      <FollowUpModal
+        isOpen={Boolean(quickFollowUpUser)}
+        user={quickFollowUpUser}
+        retargetBooksHint={quickHintBooks}
+        currentUser={currentUser}
+        onClose={() => setQuickFollowUpUser(null)}
+        onSaved={() => {
+          toast.success('Follow-up note saved.');
+          triggerRefresh();
+        }}
+      />
     </div>
   );
 }

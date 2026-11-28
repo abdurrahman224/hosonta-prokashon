@@ -25,10 +25,31 @@ import PageHeader from '../../../components/dashboard/PageHeader';
 import { useData } from '../../../context/useData';
 import {
   getStoredShops,
-  updateStoredShop,
 } from '../../../data/shops';
 import { initialCounterOrders } from '../employee/counterOrders/dummyData';
 import AddShopModal from '../../../components/dashboard/AddShopModal';
+
+const DUE_PAYMENTS_KEY = 'hosonta_wholesale_due_payments_v1';
+
+function getStoredDuePayments() {
+  try {
+    const raw = localStorage.getItem(DUE_PAYMENTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDuePaymentReceipt(receipt) {
+  try {
+    const prev = getStoredDuePayments();
+    const next = [receipt, ...prev];
+    localStorage.setItem(DUE_PAYMENTS_KEY, JSON.stringify(next));
+    return next;
+  } catch {
+    return [receipt];
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /* Constants & Helpers                                                 */
@@ -598,6 +619,139 @@ function CounterOrderInvoiceModal({ order, shop, allBooks = [], onClose }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Modal: Printable Due Payment Cash Memo                              */
+/* ------------------------------------------------------------------ */
+
+function DuePaymentMemoModal({ receipt, onClose }) {
+  if (!receipt) return null;
+
+  return (
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 p-4 print:static print:bg-white print:p-0"
+    >
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #wholesale-due-memo, #wholesale-due-memo * { visibility: visible !important; }
+          #wholesale-due-memo {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100% !important;
+            padding: 12mm !important;
+            background: white !important;
+          }
+          @page { margin: 10mm; size: A4 portrait; }
+        }
+      `}</style>
+      <div
+        onClick={e => e.stopPropagation()}
+        className="w-full max-w-lg rounded-xl bg-white shadow-xl print:rounded-none print:shadow-none"
+      >
+        <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3 print:hidden">
+          <span className="text-sm font-bold text-slate-800">Due Payment Cash Memo</span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              title="Print Memo"
+              aria-label="Print Memo"
+              className="p-1.5 text-slate-700 hover:text-dark transition"
+            >
+              <FiPrinter size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              title="Close"
+              aria-label="Close"
+              className="p-1.5 text-slate-400 hover:text-dark transition"
+            >
+              <FiX size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div id="wholesale-due-memo" className="p-6 text-xs text-slate-800 space-y-4">
+          <div className="border-b border-slate-300 pb-3 text-center">
+            <h2 className="font-heading text-xl font-bold text-slate-900">
+              {COMPANY.name}
+            </h2>
+            <p className="text-[11px] text-slate-500">
+              {COMPANY.address} • Hotline: {COMPANY.hotline}
+            </p>
+            <p className="mt-1.5 font-bold uppercase tracking-wider text-slate-800">
+              Wholesale Due Payment Cash Memo
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <p><strong>Wholesale:</strong> {receipt.shopName}</p>
+              {receipt.representative && (
+                <p><strong>Representative:</strong> {receipt.representative}</p>
+              )}
+              <p><strong>Phone:</strong> {receipt.phone || '—'}</p>
+              {receipt.address && <p><strong>Address:</strong> {receipt.address}</p>}
+            </div>
+            <div className="space-y-1 text-right">
+              <p><strong>Memo No:</strong> {receipt.id}</p>
+              <p><strong>Date:</strong> {formatDate(receipt.date)}</p>
+              <p><strong>Method:</strong> {paymentLabel(receipt.method, true)}</p>
+            </div>
+          </div>
+
+          <table className="w-full border border-slate-200 text-left">
+            <thead className="border-b border-slate-200 bg-white">
+              <tr className="whitespace-nowrap">
+                <th className="px-3 py-2 font-semibold">Particulars</th>
+                <th className="px-3 py-2 text-right font-semibold">Amount</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              <tr>
+                <td className="px-3 py-2">Previous Due Balance</td>
+                <td className="px-3 py-2 text-right font-medium">
+                  {formatCurrency(receipt.previousDue)}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-semibold">Paid Now</td>
+                <td className="px-3 py-2 text-right font-bold text-emerald-700">
+                  {formatCurrency(receipt.amountPaid)}
+                </td>
+              </tr>
+              <tr>
+                <td className="px-3 py-2 font-semibold">Remaining Due</td>
+                <td className="px-3 py-2 text-right font-bold text-rose-600">
+                  {formatCurrency(receipt.remainingDue)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          {receipt.note && (
+            <p className="text-[11px] text-slate-500">
+              <strong>Note:</strong> {receipt.note}
+            </p>
+          )}
+
+          <div className="grid grid-cols-2 gap-6 pt-8 text-center text-[11px] text-slate-500">
+            <div className="border-t border-dashed border-slate-300 pt-1">
+              Customer Signature
+            </div>
+            <div className="border-t border-dashed border-slate-300 pt-1">
+              Authorized Signature
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Modal: Record Due Payment Modal                                     */
 /* ------------------------------------------------------------------ */
 
@@ -618,29 +772,28 @@ function RecordPaymentModal({ isOpen, shop, onClose, onPaymentRecorded }) {
       return;
     }
 
-    onPaymentRecorded(shop.id, payNum, method, note);
-    toast.success(`${formatCurrency(payNum)} payment recorded successfully!`);
+    onPaymentRecorded(shop, payNum, method, note);
+    setAmount('');
+    setNote('');
     onClose();
   };
 
   return (
     <ModalShell maxW="max-w-md">
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-dark/10 px-4 py-3 sm:px-5 sm:py-4">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 sm:px-5 sm:py-4">
         <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800">
-            <FiDollarSign className="text-lg" />
-          </div>
+          <FiDollarSign className="text-lg text-emerald-700" />
           <div className="min-w-0">
             <h3 className="font-heading text-base font-bold text-dark">
               Collect Due Payment
             </h3>
-            <p className="truncate text-xs text-dark/60">{shop.shopName}</p>
+            <p className="truncate text-xs text-slate-500">{shop.shopName}</p>
           </div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="shrink-0 rounded-lg p-1.5 text-dark/50 hover:bg-dark/5"
+          className="shrink-0 p-1 text-slate-400 hover:text-dark"
           aria-label="Close"
         >
           <FiX size={18} />
@@ -649,11 +802,11 @@ function RecordPaymentModal({ isOpen, shop, onClose, onPaymentRecorded }) {
 
       <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
-            <span className="text-xs font-semibold text-amber-900">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-200 bg-white p-3.5">
+            <span className="text-xs font-semibold text-slate-600">
               Total Due Balance:
             </span>
-            <span className="font-heading text-base font-bold text-amber-900">
+            <span className="font-heading text-base font-bold text-rose-600">
               {formatCurrency(currentDue)}
             </span>
           </div>
@@ -733,8 +886,10 @@ function ShopDetailsView({
   onBack,
   allOrders = [],
   allBooks = [],
+  dueReceipts = [],
   onOpenOrderModal,
   onOpenPaymentModal,
+  onOpenDueMemo,
 }) {
   const [activeTab, setActiveTab] = useState('orders'); // 'orders' | 'books' | 'ledger'
   const [searchOrder, setSearchOrder] = useState('');
@@ -831,16 +986,17 @@ function ShopDetailsView({
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-dark/15 bg-white px-4 py-2 text-xs font-semibold text-dark shadow-2xs transition hover:border-dark/20 hover:bg-cream sm:justify-start"
+          title="Back to Wholesale"
+          aria-label="Back to Wholesale"
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-dark"
         >
           <FiArrowLeft className="text-base" />
-          <span>Back to Shops</span>
         </button>
 
         <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:flex sm:items-center">
           <Link
             to="/dashboard/counter-orders"
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-dark shadow-2xs transition hover:bg-primary-hover"
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-dark hover:bg-primary-hover"
           >
             <FiPlus className="text-sm" /> New Counter Invoice
           </Link>
@@ -848,31 +1004,29 @@ function ShopDetailsView({
             <button
               type="button"
               onClick={() => onOpenPaymentModal(shop)}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-amber-500 px-4 py-2.5 text-xs font-bold text-white shadow-2xs transition hover:bg-amber-600"
+              className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-800 hover:border-primary"
             >
-              <FiDollarSign className="text-sm" /> Collect Due
+              <FiDollarSign className="text-sm text-emerald-700" /> Collect Due
             </button>
           )}
         </div>
       </div>
 
-      {/* Shop Profile Header Banner */}
-      <div className="rounded-2xl border border-dark/10 bg-white p-4 shadow-xs sm:p-6">
+      {/* Wholesale Profile Header Banner */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between lg:gap-6">
           <div className="flex min-w-0 items-start gap-3 sm:gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/30 to-amber-200 text-dark shadow-inner sm:h-16 sm:w-16">
-              <FiShoppingBag className="text-2xl text-dark sm:text-3xl" />
-            </div>
+            <FiShoppingBag className="mt-1 shrink-0 text-2xl text-slate-700" />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="break-words font-heading text-xl font-bold text-dark sm:text-2xl">
                   {shop.shopName}
                 </h2>
-                <span className="inline-flex items-center rounded-md bg-dark/5 px-2.5 py-0.5 text-xs font-semibold text-dark/70">
-                  {shop.category || 'Bookshop'}
+                <span className="text-xs font-semibold text-slate-500">
+                  Wholesale
                 </span>
                 {shop.tradeLicense && (
-                  <span className="font-mono text-xs text-dark/50">
+                  <span className="font-mono text-xs text-slate-400">
                     License: {shop.tradeLicense}
                   </span>
                 )}
@@ -922,76 +1076,62 @@ function ShopDetailsView({
           </div>
 
           {/* Quick Balance Alert in Header */}
-          <div className="w-full rounded-xl border border-dark/10 bg-cream/60 p-4 lg:w-auto lg:min-w-[200px] lg:text-right">
-            <span className="block text-xs font-semibold text-dark/60">
+          <div className="w-full rounded-xl border border-slate-200 bg-white p-4 lg:w-auto lg:min-w-[200px] lg:text-right">
+            <span className="block text-xs font-semibold text-slate-500">
               Due Balance
             </span>
             <span
               className={`mt-0.5 block font-heading text-xl font-bold ${
-                shopDue > 0 ? 'text-amber-700' : 'text-emerald-700'
+                shopDue > 0 ? 'text-rose-600' : 'text-emerald-700'
               }`}
             >
               {formatCurrency(shop.dueAmount || 0)}
             </span>
-            <span className="text-[11px] text-dark/50">
-              {shopDue > 0 ? 'Payable immediately' : 'All invoices cleared'}
+            <span className="text-[11px] text-slate-400">
+              {shopDue > 0 ? 'Pending due' : 'Settled'}
             </span>
           </div>
         </div>
 
         {/* 4 Financial KPI Summary Cards */}
-        <div className="mt-5 grid grid-cols-2 gap-2.5 border-t border-dark/10 pt-5 sm:mt-6 sm:grid-cols-4 sm:gap-4 sm:pt-6">
-          <div className="min-w-0 rounded-xl border border-dark/10 bg-cream/40 p-3 sm:p-4">
-            <span className="text-xs font-semibold text-dark/60">
-              Total Invoices / Orders
+        <div className="mt-5 grid grid-cols-2 gap-2.5 border-t border-slate-200 pt-5 sm:mt-6 sm:grid-cols-4 sm:gap-4 sm:pt-6">
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+            <span className="text-xs font-semibold text-slate-500">
+              Total Orders
             </span>
-            <p className="mt-1 font-heading text-lg font-bold text-dark sm:text-xl">
+            <p className="mt-1 font-heading text-lg font-bold text-slate-900 sm:text-xl">
               {shop.orderCount || shopOrders.length}
             </p>
-            <p className="text-[11px] text-dark/50">Counter purchases</p>
           </div>
 
-          <div className="min-w-0 rounded-xl border border-dark/10 bg-cream/40 p-3 sm:p-4">
-            <span className="text-xs font-semibold text-dark/60">
-              Total Order Value (Sales)
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+            <span className="text-xs font-semibold text-slate-500">
+              Order Value
             </span>
             <p className="mt-1 break-words font-heading text-lg font-bold text-emerald-700 sm:text-xl">
               {formatCurrency(shop.totalOrderValue || 0)}
             </p>
-            <p className="text-[11px] text-dark/50">
-              Net after wholesale commission
-            </p>
           </div>
 
-          <div className="min-w-0 rounded-xl border border-dark/10 bg-cream/40 p-3 sm:p-4">
-            <span className="text-xs font-semibold text-dark/60">
-              Paid (Cash / Digital)
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+            <span className="text-xs font-semibold text-slate-500">
+              Paid
             </span>
-            <p className="mt-1 break-words font-heading text-lg font-bold text-dark sm:text-xl">
+            <p className="mt-1 break-words font-heading text-lg font-bold text-slate-900 sm:text-xl">
               {formatCurrency(shop.totalPaid || 0)}
             </p>
-            <p className="text-[11px] text-dark/50">Received payments</p>
           </div>
 
-          <div
-            className={`min-w-0 rounded-xl border p-3 sm:p-4 ${
-              shopDue > 0
-                ? 'border-amber-200 bg-amber-50/70'
-                : 'border-emerald-200 bg-emerald-50/70'
-            }`}
-          >
-            <span className="text-xs font-semibold text-dark/60">
+          <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
+            <span className="text-xs font-semibold text-slate-500">
               Due Amount
             </span>
             <p
               className={`mt-1 break-words font-heading text-lg font-bold sm:text-xl ${
-                shopDue > 0 ? 'text-amber-800' : 'text-emerald-800'
+                shopDue > 0 ? 'text-rose-600' : 'text-emerald-700'
               }`}
             >
               {formatCurrency(shop.dueAmount || 0)}
-            </p>
-            <p className="text-[11px] text-dark/60">
-              {shopDue > 0 ? 'Pending settlement' : 'No due balance'}
             </p>
           </div>
         </div>
@@ -1115,11 +1255,11 @@ function ShopDetailsView({
           </div>
 
           {/* Desktop: table */}
-          <div className="hidden overflow-hidden rounded-2xl border border-dark/10 bg-white shadow-2xs lg:block">
+          <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white lg:block">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[720px] text-left text-xs">
-                <thead className="border-b border-dark/10 bg-dark/5 text-[11px] font-bold uppercase tracking-wider text-dark">
-                  <tr>
+                <thead className="border-b border-slate-200 bg-white text-[11px] font-semibold uppercase tracking-wider text-slate-600">
+                  <tr className="whitespace-nowrap">
                     <th className="px-4 py-3">Invoice No. & Date</th>
                     <th className="px-4 py-3">Book Details</th>
                     <th className="px-4 py-3 text-center">Commission</th>
@@ -1256,18 +1396,59 @@ function ShopDetailsView({
         <div className="space-y-4">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <h3 className="font-heading text-base font-bold text-dark sm:text-lg">
-              Customer Account Ledger & Dues
+              Wholesale Account Ledger & Dues
             </h3>
             <button
               type="button"
               onClick={() => window.print()}
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-dark/15 bg-white px-3 py-2 text-xs font-semibold text-dark hover:bg-cream sm:self-auto"
+              title="Print Statement"
+              aria-label="Print Statement"
+              className="p-1.5 text-slate-600 hover:text-dark sm:self-auto"
             >
-              <FiPrinter /> Print Statement
+              <FiPrinter size={18} />
             </button>
           </div>
 
-          <div className="rounded-2xl border border-dark/10 bg-white p-3 shadow-2xs sm:p-5">
+          {dueReceipts.length > 0 && (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h4 className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-600">
+                Collected Due Payment Memos
+              </h4>
+              <div className="divide-y divide-slate-100">
+                {dueReceipts.map(r => (
+                  <div
+                    key={r.id}
+                    className="flex flex-wrap items-center justify-between gap-2 py-2.5 text-xs"
+                  >
+                    <div>
+                      <span className="font-mono font-bold text-slate-900">{r.id}</span>
+                      <span className="ml-2 text-slate-500">{formatDate(r.date)}</span>
+                      {r.note && <span className="ml-2 text-slate-500">• {r.note}</span>}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="font-bold text-emerald-700">
+                        Paid {formatCurrency(r.amountPaid)}
+                      </span>
+                      <span className="text-slate-500">
+                        Due Left: {formatCurrency(r.remainingDue)}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onOpenDueMemo(r)}
+                        title="Print Cash Memo"
+                        aria-label="Print Cash Memo"
+                        className="p-1 text-slate-600 hover:text-dark"
+                      >
+                        <FiPrinter size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-5">
             <div className="divide-y divide-dark/10">
               {shopOrders.length === 0 && (
                 <p className="py-6 text-center text-xs text-dark/50">
@@ -1345,8 +1526,9 @@ export default function ShopManagement({ embedded = false }) {
   const { shopName: routeShopName, id: routeShopId } = useParams();
   const navigate = useNavigate();
 
-  // Stored shops from localStorage / seed
+  // Stored shops & due payment memos from localStorage
   const [shopsList, setShopsList] = useState(getStoredShops);
+  const [duePayments, setDuePayments] = useState(getStoredDuePayments);
   const [selectedShopId, setSelectedShopId] = useState(null);
 
   // Filters & Sorting
@@ -1359,6 +1541,7 @@ export default function ShopManagement({ embedded = false }) {
   const [activeInvoiceShop, setActiveInvoiceShop] = useState(null);
   const [isAddShopOpen, setIsAddShopOpen] = useState(false);
   const [paymentModalShop, setPaymentModalShop] = useState(null);
+  const [dueMemoReceipt, setDueMemoReceipt] = useState(null);
 
   // Merge context orders with dummy counter orders
   const allCounterOrders = useMemo(() => {
@@ -1405,23 +1588,28 @@ export default function ShopManagement({ embedded = false }) {
         return false;
       });
 
+      const shopDueCollected = duePayments
+        .filter(p => String(p.shopId) === String(shop.id))
+        .reduce((sum, p) => sum + Number(p.amountPaid || 0), 0);
+
       const orderCount = shopOrders.length;
       const totalOrderValue = shopOrders.reduce(
         (sum, o) => sum + Number(o.total || 0),
         0,
       );
-      const totalPaid = shopOrders.reduce(
-        (sum, o) =>
-          sum +
-          Number(
-            o.amountPaid !== undefined
-              ? o.amountPaid
-              : o.paymentStatus === 'paid'
-                ? o.total || 0
-                : 0,
-          ),
-        0,
-      );
+      const totalPaid =
+        shopOrders.reduce(
+          (sum, o) =>
+            sum +
+            Number(
+              o.amountPaid !== undefined
+                ? o.amountPaid
+                : o.paymentStatus === 'paid'
+                  ? o.total || 0
+                  : 0,
+            ),
+          0,
+        ) + shopDueCollected;
 
       const calculatedDue = shopOrders.reduce((sum, o) => {
         const orderDue =
@@ -1431,10 +1619,10 @@ export default function ShopManagement({ embedded = false }) {
         return sum + orderDue;
       }, 0);
 
-      // Total due is calculated due plus any static initial due
+      // Total due accounts for due payments already collected
       const dueAmount = Math.max(
         0,
-        calculatedDue + Number(shop.initialDue || 0),
+        calculatedDue + Number(shop.initialDue || 0) - shopDueCollected,
       );
 
       const totalItems = shopOrders.reduce((sum, o) => {
@@ -1454,7 +1642,7 @@ export default function ShopManagement({ embedded = false }) {
         totalItems,
       };
     });
-  }, [shopsList, allCounterOrders]);
+  }, [shopsList, allCounterOrders, duePayments]);
 
   // Active Selected Shop (matched by shop name in route, with fallback to selectedShopId or legacy ID)
   const activeShop = useMemo(() => {
@@ -1556,30 +1744,34 @@ export default function ShopManagement({ embedded = false }) {
     }
   };
 
-  const handlePaymentRecorded = (shopId, amountPaid) => {
-    const updated = shopsList.map(s => {
-      if (String(s.id) === String(shopId)) {
-        const currentInitial = Number(s.initialDue || 0);
-        return {
-          ...s,
-          initialDue: Math.max(0, currentInitial - amountPaid),
-        };
-      }
-      return s;
-    });
-    setShopsList(updated);
-    updateStoredShop(shopId, {
-      initialDue: Math.max(
-        0,
-        Number(
-          updated.find(s => String(s.id) === String(shopId))?.initialDue || 0,
-        ),
-      ),
-    });
+  const handlePaymentRecorded = (shop, amountPaid, method, note) => {
+    const previousDue = Number(shop.dueAmount || 0);
+    const remainingDue = Math.max(0, previousDue - amountPaid);
+    const receipt = {
+      id: `DUE-${Date.now().toString().slice(-5)}`,
+      shopId: shop.id,
+      shopName: shop.shopName,
+      representative: shop.representative || shop.ownerName || '',
+      phone: shop.phone || '',
+      address: shop.address || '',
+      previousDue,
+      amountPaid,
+      remainingDue,
+      method,
+      note,
+      date: new Date().toISOString().slice(0, 10),
+    };
+    const nextReceipts = saveDuePaymentReceipt(receipt);
+    setDuePayments(nextReceipts);
+    toast.success(`${formatCurrency(amountPaid)} payment recorded.`);
+    setDueMemoReceipt(receipt);
   };
 
-  // If a shop is active, show the detailed profile & order history view
+  // If a wholesale profile is active, show the detailed profile & order history view
   if (activeShop) {
+    const activeDueReceipts = duePayments.filter(
+      p => String(p.shopId) === String(activeShop.id),
+    );
     return (
       <div className="space-y-5 sm:space-y-6">
         <ShopDetailsView
@@ -1587,11 +1779,13 @@ export default function ShopManagement({ embedded = false }) {
           onBack={handleBackToList}
           allOrders={allCounterOrders}
           allBooks={books}
+          dueReceipts={activeDueReceipts}
           onOpenOrderModal={(order, shop) => {
             setActiveInvoiceOrder(order);
             setActiveInvoiceShop(shop);
           }}
           onOpenPaymentModal={shop => setPaymentModalShop(shop)}
+          onOpenDueMemo={receipt => setDueMemoReceipt(receipt)}
         />
 
         {/* Invoice Modal */}
@@ -1614,124 +1808,89 @@ export default function ShopManagement({ embedded = false }) {
           onClose={() => setPaymentModalShop(null)}
           onPaymentRecorded={handlePaymentRecorded}
         />
+
+        {/* Printable Due Payment Memo */}
+        <DuePaymentMemoModal
+          receipt={dueMemoReceipt}
+          onClose={() => setDueMemoReceipt(null)}
+        />
       </div>
     );
   }
 
   return (
-    <div className="space-y-5 sm:space-y-6">
+    <div className="space-y-5">
       {/* Page Header (Hidden when embedded in Counter Sales) */}
       {!embedded && (
         <PageHeader
-          title="Shop Management"
-          description="Directory and profiles of bookshops, libraries, and wholesale counter customers."
+          title="Wholesale"
         />
       )}
 
-      {/* Top 4 KPI Metrics Cards */}
-      <div className="grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
-        <div className="min-w-0 rounded-2xl border border-dark/10 bg-white p-3 shadow-2xs sm:p-4">
-          <div className="flex items-center justify-between gap-2 text-dark/60">
-            <span className="text-xs font-semibold">Registered Shops</span>
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/20 text-dark">
-              <FiShoppingBag className="text-base" />
-            </div>
+      {/* Top 4 KPI Metrics Cards (Plain white, no colored icon backgrounds) */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs font-semibold">Wholesale</span>
+            <FiShoppingBag className="text-base text-slate-600" />
           </div>
-          <p className="mt-2 font-heading text-xl font-bold text-dark sm:text-2xl">
+          <p className="mt-1.5 font-heading text-xl font-bold text-slate-900">
             {totalShopsCount}
           </p>
-          <p className="mt-0.5 text-[11px] text-dark/50">
-            Bookshop & library partners
-          </p>
         </div>
 
-        <div className="min-w-0 rounded-2xl border border-dark/10 bg-white p-3 shadow-2xs sm:p-4">
-          <div className="flex items-center justify-between gap-2 text-dark/60">
-            <span className="text-xs font-semibold">Total Counter Sales</span>
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-800">
-              <FiTrendingUp className="text-base" />
-            </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs font-semibold">Total Sales</span>
+            <FiTrendingUp className="text-base text-emerald-600" />
           </div>
-          <p className="mt-2 break-words font-heading text-xl font-bold text-emerald-700 sm:text-2xl">
+          <p className="mt-1.5 font-heading text-xl font-bold text-emerald-700">
             {formatCurrency(totalSalesAll)}
           </p>
-          <p className="mt-0.5 text-[11px] text-dark/50">
-            Combined invoices across shops
-          </p>
         </div>
 
-        <div className="min-w-0 rounded-2xl border border-dark/10 bg-white p-3 shadow-2xs sm:p-4">
-          <div className="flex items-center justify-between gap-2 text-dark/60">
-            <span className="text-xs font-semibold">Collected Payments</span>
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-800">
-              <FiDollarSign className="text-base" />
-            </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs font-semibold">Paid</span>
+            <FiDollarSign className="text-base text-blue-600" />
           </div>
-          <p className="mt-2 break-words font-heading text-xl font-bold text-dark sm:text-2xl">
+          <p className="mt-1.5 font-heading text-xl font-bold text-slate-900">
             {formatCurrency(totalPaidAll)}
           </p>
-          <p className="mt-0.5 text-[11px] text-dark/50">Cash & digital deposits</p>
         </div>
 
-        <div
-          className={`min-w-0 rounded-2xl border p-3 shadow-2xs sm:p-4 ${
-            totalDueAll > 0
-              ? 'border-amber-200 bg-amber-50/70'
-              : 'border-emerald-200 bg-emerald-50/70'
-          }`}
-        >
-          <div className="flex items-center justify-between gap-2 text-dark/60">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between text-slate-500">
             <span className="text-xs font-semibold">Total Due</span>
-            <div
-              className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
-                totalDueAll > 0
-                  ? 'bg-amber-200 text-amber-900'
-                  : 'bg-emerald-200 text-emerald-900'
-              }`}
-            >
-              <FiAlertTriangle className="text-base" />
-            </div>
+            <FiAlertTriangle className={`text-base ${totalDueAll > 0 ? 'text-rose-600' : 'text-emerald-600'}`} />
           </div>
-          <p
-            className={`mt-2 break-words font-heading text-xl font-bold sm:text-2xl ${
-              totalDueAll > 0 ? 'text-amber-800' : 'text-emerald-800'
-            }`}
-          >
+          <p className={`mt-1.5 font-heading text-xl font-bold ${totalDueAll > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
             {formatCurrency(totalDueAll)}
-          </p>
-          <p className="mt-0.5 text-[11px] text-dark/60">
-            {totalDueAll > 0
-              ? 'Receivable from shops'
-              : 'All dues settled'}
           </p>
         </div>
       </div>
 
-      {/* Filter, Search & Add Shop Bar */}
-      <div className="rounded-2xl border border-dark/10 bg-white p-3 shadow-2xs sm:p-4">
+      {/* Filter, Search & Add Wholesale Bar */}
+      <div className="rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          {/* Search Box */}
           <div className="relative flex-1">
-            <FiSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-dark/40" />
+            <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={14} />
             <input
               type="text"
-              placeholder="Search by shop name, owner, phone, or area..."
+              placeholder="Search wholesale..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-dark/15 bg-cream/40 py-2.5 pl-10 pr-4 text-xs text-dark placeholder:text-dark/40 focus:border-primary focus:bg-white focus:outline-none sm:text-sm"
+              className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs text-slate-900 placeholder:text-slate-400 focus:border-primary focus:outline-none sm:text-sm"
             />
           </div>
 
-          {/* Filters & Actions */}
           <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
             <select
               value={dueFilter}
               onChange={e => setDueFilter(e.target.value)}
-              className="w-full rounded-xl border border-dark/15 bg-white px-3 py-2.5 text-xs font-semibold text-dark focus:border-primary focus:outline-none sm:w-auto"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 focus:border-primary focus:outline-none sm:w-auto"
             >
-              <option value="all">
-                All Shops ({totalShopsCount})
-              </option>
+              <option value="all">All Wholesale ({totalShopsCount})</option>
               <option value="due">Has Due Balance</option>
               <option value="paid">Paid (Zero Due)</option>
               <option value="dhaka">Dhaka Region</option>
@@ -1741,30 +1900,30 @@ export default function ShopManagement({ embedded = false }) {
             <select
               value={sortBy}
               onChange={e => setSortBy(e.target.value)}
-              className="w-full rounded-xl border border-dark/15 bg-white px-3 py-2.5 text-xs font-semibold text-dark focus:border-primary focus:outline-none sm:w-auto"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 focus:border-primary focus:outline-none sm:w-auto"
             >
               <option value="value">Highest Order Value</option>
               <option value="due">Highest Due</option>
               <option value="orders">Most Orders</option>
-              <option value="name">Shop Name (A-Z)</option>
+              <option value="name">Name (A-Z)</option>
             </select>
 
             <button
               type="button"
               onClick={() => setIsAddShopOpen(true)}
-              className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary px-4 py-2.5 text-xs font-bold text-dark shadow-2xs transition hover:bg-primary-hover sm:col-auto"
+              className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-dark hover:bg-primary-hover sm:col-auto"
             >
-              <FiPlus className="text-sm" /> Add New Shop
+              <FiPlus className="text-sm" /> Add Wholesale
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mobile / tablet: shop cards */}
+      {/* Mobile / tablet: minimal wholesale cards */}
       <div className="space-y-3 lg:hidden">
         {visibleShops.length === 0 ? (
-          <div className="rounded-2xl border border-dark/10 bg-white py-12 text-center text-xs text-dark/50">
-            No shops found.
+          <div className="rounded-xl border border-slate-200 bg-white py-10 text-center text-xs text-slate-500">
+            No wholesale records found.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1772,126 +1931,50 @@ export default function ShopManagement({ embedded = false }) {
               <div
                 key={shop.id}
                 onClick={() => handleSelectShop(shop)}
-                className="cursor-pointer rounded-2xl border border-dark/10 bg-white p-4 shadow-2xs transition hover:bg-cream/40"
+                className="cursor-pointer rounded-xl border border-slate-200 bg-white p-4 transition hover:border-primary"
               >
-                <div className="flex items-start gap-3">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/30 to-amber-200 text-dark shadow-2xs">
-                    <FiShoppingBag className="text-lg" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="block break-words font-heading text-sm font-bold text-dark">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <FiShoppingBag className="shrink-0 text-base text-slate-600" />
+                    <span className="truncate text-sm font-bold text-slate-900">
                       {shop.shopName}
                     </span>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
-                      <span className="rounded bg-dark/5 px-1.5 py-0.5 text-[10px] font-semibold text-dark/70">
-                        {shop.category}
-                      </span>
-                      {shop.district && (
-                        <span className="text-[10px] font-medium text-dark/50">
-                          • {shop.district}
-                        </span>
-                      )}
-                    </div>
                   </div>
-                  {shop.dueAmount > 0 ? (
-                    <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-0.5 text-[11px] font-bold text-amber-800">
-                      {formatCurrency(shop.dueAmount)} Due
-                    </span>
-                  ) : (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-bold text-emerald-800">
-                      <FiCheckCircle size={12} /> Paid
-                    </span>
-                  )}
-                </div>
-
-                <div className="mt-3 flex items-center justify-between gap-2 text-xs text-dark/70">
-                  <span className="min-w-0 truncate font-semibold text-dark">
-                    {shop.representative || shop.ownerName || '—'}
-                  </span>
-                  <span className="flex shrink-0 items-center gap-2">
-                    <span className="font-mono text-[11px]">{shop.phone}</span>
-                    <a
-                      href={`https://wa.me/88${shop.phone.replace(/\D/g, '')}`}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={e => e.stopPropagation()}
-                      className="text-emerald-600 hover:text-emerald-700"
-                      title="WhatsApp"
-                    >
-                      <FaWhatsapp size={15} />
-                    </a>
+                  <span className={`shrink-0 text-xs font-bold ${shop.dueAmount > 0 ? 'text-rose-600' : 'text-emerald-700'}`}>
+                    {shop.dueAmount > 0 ? `${formatCurrency(shop.dueAmount)} Due` : 'Paid'}
                   </span>
                 </div>
 
-                <div className="mt-3 grid grid-cols-3 gap-2 border-t border-dark/10 pt-3 text-xs">
-                  <div>
-                    <span className="block text-[11px] text-dark/50">
-                      Orders
-                    </span>
-                    <span className="font-heading font-bold text-dark">
-                      {shop.orderCount}
-                    </span>
-                    <span className="block text-[10px] text-dark/50">
-                      {shop.totalItems} copies
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-[11px] text-dark/50">
-                      Order Value
-                    </span>
-                    <span className="font-heading font-bold text-emerald-700">
-                      {formatCurrency(shop.totalOrderValue)}
-                    </span>
-                    <span className="block text-[10px] text-dark/50">
-                      Paid: {formatCurrency(shop.totalPaid)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="block text-[11px] text-dark/50">
-                      Commission
-                    </span>
-                    <span className="font-bold text-dark/80">
-                      {shop.defaultCommission || 35}%
-                    </span>
-                  </div>
+                <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                  <span>{shop.phone}</span>
+                  <span>{shop.orderCount} orders · {formatCurrency(shop.totalOrderValue)}</span>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={e => {
-                    e.stopPropagation();
-                    handleSelectShop(shop);
-                  }}
-                  className="mt-3 inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-dark/15 bg-white px-3 py-2 text-xs font-semibold text-dark shadow-2xs transition hover:border-primary hover:bg-primary"
-                >
-                  <FiEye /> Details
-                </button>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Desktop: shops table */}
-      <div className="hidden overflow-hidden rounded-2xl border border-dark/10 bg-white shadow-2xs lg:block">
+      {/* Desktop: clean single-line header wholesale table */}
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white lg:block">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-left text-xs">
-            <thead className="border-b border-dark/10 bg-dark/5 text-[11px] font-bold uppercase tracking-wider text-dark">
-              <tr>
-                <th className="px-4 py-3.5">Shop Name & Category</th>
-                <th className="px-4 py-3.5">Owner & Contact</th>
-                <th className="px-4 py-3.5 text-center">Total Orders</th>
-                <th className="px-4 py-3.5 text-right">Total Order Value</th>
-                <th className="px-4 py-3.5 text-right">Due Bill</th>
-                <th className="px-4 py-3.5 text-center">Commission Rate</th>
-                <th className="px-4 py-3.5 text-right">Action</th>
+          <table className="w-full text-left text-xs">
+            <thead className="border-b border-slate-200 bg-white text-xs font-semibold text-slate-500">
+              <tr className="whitespace-nowrap">
+                <th className="px-4 py-3">Wholesale Name</th>
+                <th className="px-4 py-3">Contact</th>
+                <th className="px-4 py-3 text-center">Orders</th>
+                <th className="px-4 py-3 text-right">Order Value</th>
+                <th className="px-4 py-3 text-right">Due</th>
+                <th className="px-4 py-3 text-center">Commission</th>
+                <th className="px-4 py-3 text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-dark/5">
+            <tbody className="divide-y divide-slate-100">
               {visibleShops.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-dark/50">
-                    No shops found.
+                  <td colSpan={7} className="py-10 text-center text-slate-500">
+                    No wholesale records found.
                   </td>
                 </tr>
               ) : (
@@ -1899,101 +1982,62 @@ export default function ShopManagement({ embedded = false }) {
                   <tr
                     key={shop.id}
                     onClick={() => handleSelectShop(shop)}
-                    className="group cursor-pointer transition hover:bg-cream/40"
+                    className="cursor-pointer transition hover:bg-slate-50/70"
                   >
-                    <td className="px-4 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/30 to-amber-200 font-bold text-dark shadow-2xs">
-                          <FiShoppingBag className="text-lg" />
-                        </div>
-                        <div>
-                          <span className="font-heading text-sm font-bold text-dark transition group-hover:text-primary-hover">
-                            {shop.shopName}
-                          </span>
-                          <div className="mt-0.5 flex items-center gap-2">
-                            <span className="rounded bg-dark/5 px-1.5 py-0.5 text-[10px] font-semibold text-dark/70">
-                              {shop.category}
-                            </span>
-                            {shop.district && (
-                              <span className="text-[10px] font-medium text-dark/50">
-                                • {shop.district}
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                    <td className="whitespace-nowrap px-4 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <FiShoppingBag className="shrink-0 text-base text-slate-600" />
+                        <span className="text-sm font-semibold text-slate-900">
+                          {shop.shopName}
+                        </span>
                       </div>
                     </td>
 
-                    <td className="px-4 py-3.5">
-                      <span className="block font-semibold text-dark">
-                        {shop.representative || shop.ownerName || '—'}
-                      </span>
-                      <div className="mt-0.5 flex items-center gap-2 text-dark/70">
-                        <span className="font-mono text-[11px]">
-                          {shop.phone}
-                        </span>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-slate-600">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs">{shop.phone}</span>
                         <a
-                          href={`https://wa.me/88${shop.phone.replace(
-                            /\D/g,
-                            '',
-                          )}`}
+                          href={`https://wa.me/88${shop.phone.replace(/\D/g, '')}`}
                           target="_blank"
                           rel="noreferrer"
                           onClick={e => e.stopPropagation()}
                           className="text-emerald-600 hover:text-emerald-700"
                           title="WhatsApp"
+                          aria-label="WhatsApp"
                         >
-                          <FaWhatsapp size={13} />
+                          <FaWhatsapp size={14} />
                         </a>
                       </div>
                     </td>
 
-                    <td className="px-4 py-3.5 text-center">
-                      <span className="block font-heading text-sm font-bold text-dark">
-                        {shop.orderCount} {shop.orderCount === 1 ? 'order' : 'orders'}
-                      </span>
-                      <span className="text-[11px] text-dark/50">
-                        {shop.totalItems} copies
-                      </span>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-center font-semibold text-slate-700">
+                      {shop.orderCount}
                     </td>
 
-                    <td className="px-4 py-3.5 text-right">
-                      <span className="block font-heading text-sm font-bold text-emerald-700">
-                        {formatCurrency(shop.totalOrderValue)}
-                      </span>
-                      <span className="text-[11px] text-dark/50">
-                        Paid: {formatCurrency(shop.totalPaid)}
-                      </span>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-right font-semibold text-emerald-700">
+                      {formatCurrency(shop.totalOrderValue)}
                     </td>
 
-                    <td className="px-4 py-3.5 text-right">
-                      {shop.dueAmount > 0 ? (
-                        <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2.5 py-0.5 font-bold text-amber-800">
-                          {formatCurrency(shop.dueAmount)} Due
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 font-bold text-emerald-800">
-                          <FiCheckCircle size={12} /> Paid
-                        </span>
-                      )}
+                    <td className={`whitespace-nowrap px-4 py-3.5 text-right font-semibold ${shop.dueAmount > 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+                      {shop.dueAmount > 0 ? formatCurrency(shop.dueAmount) : '0'}
                     </td>
 
-                    <td className="px-4 py-3.5 text-center">
-                      <span className="rounded-md bg-dark/5 px-2 py-1 font-bold text-dark/80">
-                        {shop.defaultCommission || 35}%
-                      </span>
+                    <td className="whitespace-nowrap px-4 py-3.5 text-center font-medium text-slate-700">
+                      {shop.defaultCommission || 35}%
                     </td>
 
                     <td
-                      className="px-4 py-3.5 text-right"
+                      className="whitespace-nowrap px-4 py-3.5 text-right"
                       onClick={e => e.stopPropagation()}
                     >
                       <button
                         type="button"
                         onClick={() => handleSelectShop(shop)}
-                        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-dark/15 bg-white px-3 py-1.5 text-xs font-semibold text-dark shadow-2xs transition hover:border-primary hover:bg-primary"
+                        title="View Wholesale Profile"
+                        aria-label="View Wholesale Profile"
+                        className="p-1 text-slate-500 hover:text-dark transition"
                       >
-                        <FiEye /> Details
+                        <FiEye size={16} />
                       </button>
                     </td>
                   </tr>
